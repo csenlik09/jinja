@@ -1,0 +1,16 @@
+Hello {{ name }},
+
+Thank you for signing up! Here are your account details:
+
+Username: {{ username }}
+Email: {{ email }}
+
+{% if premium %}
+You are a premium member with the following benefits:
+{% for benefit in benefits %}
+- {{ benefit }}
+{% endfor %}
+{% endif %}
+
+Best regards,
+The Team
