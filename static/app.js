@@ -349,17 +349,13 @@ function downloadAllConfigs() {
     URL.revokeObjectURL(url);
 }
 
-function showTemplateDownloadDialog() {
-    const hostType = prompt('Enter host type (e.g., Leaf, Spine, Border):');
-    if (!hostType) return;
+function downloadTemplateExcel() {
+    if (!currentTemplateId) {
+        alert('Please select a template first');
+        return;
+    }
 
-    const vendor = prompt('Enter vendor (e.g., Cisco, Arista):');
-    if (!vendor) return;
-
-    const os = prompt('Enter OS (e.g., NXOS, EOS):');
-    if (!os) return;
-
-    const url = `/api/download-template-excel?host_type=${encodeURIComponent(hostType)}&vendor=${encodeURIComponent(vendor)}&os=${encodeURIComponent(os)}`;
+    const url = `/api/download-template-excel/${currentTemplateId}`;
     window.location.href = url;
 }
 
@@ -626,4 +622,213 @@ function cancelEdit() {
     document.querySelectorAll('.template-item').forEach(item => {
         item.classList.remove('selected');
     });
+}
+
+// ========== Metadata Management ==========
+async function showMetadataManager() {
+    document.getElementById('metadataModal').style.display = 'flex';
+    await loadMetadataLists();
+}
+
+function closeMetadataManager() {
+    document.getElementById('metadataModal').style.display = 'none';
+}
+
+async function loadMetadataLists() {
+    try {
+        const [hostTypes, vendors, osTypes] = await Promise.all([
+            fetch('/api/host-types').then(r => r.json()),
+            fetch('/api/vendors').then(r => r.json()),
+            fetch('/api/os-types').then(r => r.json())
+        ]);
+
+        // Populate host types list
+        document.getElementById('hostTypesList').innerHTML = hostTypes.map(ht => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
+                <span style="color: #ccc;">${ht}</span>
+                <button onclick="removeHostType('${ht}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
+            </div>
+        `).join('');
+
+        // Populate vendors list
+        document.getElementById('vendorsList').innerHTML = vendors.map(v => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
+                <span style="color: #ccc;">${v}</span>
+                <button onclick="removeVendor('${v}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
+            </div>
+        `).join('');
+
+        // Populate OS types list
+        document.getElementById('osList').innerHTML = osTypes.map(os => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
+                <span style="color: #ccc;">${os.vendor} - ${os.name}</span>
+                <button onclick="removeOS('${os.vendor}', '${os.name}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
+            </div>
+        `).join('');
+
+        // Populate vendor dropdown for OS
+        const vendorSelect = document.getElementById('newOSVendor');
+        vendorSelect.innerHTML = '<option value="">Select vendor</option>' +
+            vendors.map(v => `<option value="${v}">${v}</option>`).join('');
+
+    } catch (error) {
+        console.error('Error loading metadata lists:', error);
+    }
+}
+
+async function addNewHostType() {
+    const name = document.getElementById('newHostType').value.trim();
+    if (!name) {
+        alert('Please enter a host type name');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/host-types', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('newHostType').value = '';
+            await loadMetadataLists();
+            await loadMetadata();
+        } else {
+            alert('Error adding host type: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error adding host type: ' + error.message);
+    }
+}
+
+async function removeHostType(name) {
+    if (!confirm(`Remove host type "${name}"? This may affect existing templates.`)) return;
+
+    try {
+        const response = await fetch(`/api/host-types/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            await loadMetadataLists();
+            await loadMetadata();
+            await loadTemplates();
+        } else {
+            alert('Error removing host type: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error removing host type: ' + error.message);
+    }
+}
+
+async function addNewVendor() {
+    const name = document.getElementById('newVendor').value.trim();
+    if (!name) {
+        alert('Please enter a vendor name');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/vendors', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('newVendor').value = '';
+            await loadMetadataLists();
+            await loadMetadata();
+        } else {
+            alert('Error adding vendor: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error adding vendor: ' + error.message);
+    }
+}
+
+async function removeVendor(name) {
+    if (!confirm(`Remove vendor "${name}"? This may affect existing templates.`)) return;
+
+    try {
+        const response = await fetch(`/api/vendors/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            await loadMetadataLists();
+            await loadMetadata();
+            await loadTemplates();
+        } else {
+            alert('Error removing vendor: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error removing vendor: ' + error.message);
+    }
+}
+
+async function addNewOS() {
+    const vendor = document.getElementById('newOSVendor').value;
+    const name = document.getElementById('newOS').value.trim();
+
+    if (!vendor) {
+        alert('Please select a vendor');
+        return;
+    }
+
+    if (!name) {
+        alert('Please enter an OS name');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/os-types', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({vendor, name})
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('newOS').value = '';
+            await loadMetadataLists();
+            await loadMetadata();
+        } else {
+            alert('Error adding OS type: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error adding OS type: ' + error.message);
+    }
+}
+
+async function removeOS(vendor, name) {
+    if (!confirm(`Remove OS "${vendor} - ${name}"? This may affect existing templates.`)) return;
+
+    try {
+        const response = await fetch(`/api/os-types/${encodeURIComponent(vendor)}/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            await loadMetadataLists();
+            await loadMetadata();
+            await loadTemplates();
+        } else {
+            alert('Error removing OS type: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error removing OS type: ' + error.message);
+    }
 }

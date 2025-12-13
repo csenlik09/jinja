@@ -229,47 +229,26 @@ def generate_configs():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/download-template-excel', methods=['GET'])
-def download_template_excel():
+@app.route('/api/download-template-excel/<int:template_id>', methods=['GET'])
+def download_template_excel(template_id):
     try:
-        host_type = request.args.get('host_type')
-        vendor = request.args.get('vendor')
-        os = request.args.get('os')
+        template_obj = db.get_template(template_id)
 
-        if not all([host_type, vendor, os]):
-            return jsonify({'error': 'host_type, vendor, and os are required'}), 400
+        if not template_obj:
+            return jsonify({'error': 'Template not found'}), 404
 
-        # Find template
-        templates = db.get_templates_by_criteria(host_type, vendor, os)
-
-        if not templates:
-            return jsonify({'error': 'No template found'}), 404
-
-        template_obj = templates[0]
-        template_id = template_obj['id']
         fields = db.get_template_fields(template_id)
 
-        # Create Excel template with column headers
-        columns = ['host_type', 'vendor', 'os']
+        # Extract variables from template
+        from jinja2 import meta, Environment
+        env = Environment()
+        ast = env.parse(template_obj['template_content'])
+        variables = meta.find_undeclared_variables(ast)
 
-        if fields:
-            columns.extend([f['field_name'] for f in fields])
-        else:
-            # Extract variables from template
-            from jinja2 import meta, Environment
-            env = Environment()
-            ast = env.parse(template_obj['template_content'])
-            variables = meta.find_undeclared_variables(ast)
-            columns.extend(sorted(variables - {'host_type', 'vendor', 'os'}))
+        # Only use variables, no sample data
+        columns = sorted(list(variables))
 
-        # Create sample row
-        sample_data = {
-            'host_type': host_type,
-            'vendor': vendor,
-            'os': os
-        }
-
-        df = pd.DataFrame([sample_data], columns=columns)
+        df = pd.DataFrame(columns=columns)
 
         # Save to BytesIO
         output = BytesIO()
@@ -277,7 +256,7 @@ def download_template_excel():
             df.to_excel(writer, index=False, sheet_name='Config Data')
         output.seek(0)
 
-        filename = f'template_{host_type}_{vendor}_{os}.xlsx'
+        filename = f'template_{template_obj["name"]}.xlsx'
 
         return send_file(
             output,
@@ -288,6 +267,59 @@ def download_template_excel():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+# ========== Metadata Management API Endpoints ==========
+
+@app.route('/api/host-types', methods=['POST'])
+def add_host_type():
+    try:
+        data = request.get_json()
+        db.add_host_type(data['name'], data.get('description', ''))
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/host-types/<name>', methods=['DELETE'])
+def remove_host_type(name):
+    try:
+        db.remove_host_type(name)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/vendors', methods=['POST'])
+def add_vendor():
+    try:
+        data = request.get_json()
+        db.add_vendor(data['name'])
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/vendors/<name>', methods=['DELETE'])
+def remove_vendor(name):
+    try:
+        db.remove_vendor(name)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/os-types', methods=['POST'])
+def add_os_type():
+    try:
+        data = request.get_json()
+        db.add_os_type(data['vendor'], data['name'])
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/os-types/<vendor>/<name>', methods=['DELETE'])
+def remove_os_type(vendor, name):
+    try:
+        db.remove_os_type(vendor, name)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug=False)

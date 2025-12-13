@@ -247,3 +247,46 @@ class Database:
         fields = cursor.fetchall()
         conn.close()
         return [dict(f) for f in fields]
+
+    # Metadata management
+    def add_host_type(self, name, description=''):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO host_types (name, description) VALUES (?, ?)', (name, description))
+        conn.commit()
+        conn.close()
+
+    def remove_host_type(self, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM host_types WHERE name = ?', (name,))
+        conn.commit()
+        conn.close()
+
+    def add_vendor(self, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO vendors (name) VALUES (?)', (name,))
+        conn.commit()
+        conn.close()
+
+    def remove_vendor(self, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM vendors WHERE name = ?', (name,))
+        conn.commit()
+        conn.close()
+
+    def add_os_type(self, vendor, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO os_types (vendor, name) VALUES (?, ?)', (vendor, name))
+        conn.commit()
+        conn.close()
+
+    def remove_os_type(self, vendor, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM os_types WHERE vendor = ? AND name = ?', (vendor, name))
+        conn.commit()
+        conn.close()
