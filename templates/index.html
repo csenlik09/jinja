@@ -306,13 +306,13 @@
                     rawOutputText = data.output;
 
                     // Apply syntax highlighting for network configs
-                    // Remove ALL blank lines for compact display
-                    const lines = data.output.split('\n');
+                    // Remove ALL blank/empty lines and trim output
+                    const lines = data.output.trim().split('\n');
                     const filteredLines = lines.filter(line => line.trim() !== '');
 
                     const highlightedLines = filteredLines.map(line => highlightNetworkConfig(line));
                     outputContainer.innerHTML = highlightedLines.join('\n');
-                } else {
+                } else{
                     // Show error with orange highlighting
                     outputContainer.textContent = '⚠️ Error:\n' + data.error;
                     outputContainer.style.color = '#ff9800';
