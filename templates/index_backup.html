@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jinja2 Template Tester</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/jinja2/jinja2.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+            background: #252526;
+            overflow: hidden;
+        }
+
+        .panel:last-child {
+            border-right: none;
+        }
+
+        .panel-header {
+            padding: 10px 15px;
+            background: #2d2d30;
+            border-bottom: 1px solid #333;
+            color: #ccc;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .editor-container {
+            flex: 1;
+            overflow: auto;
+        }
+
+        .CodeMirror {
+            height: 100%;
+            font-family: 'SF Mono', 'Monaco', 'Roboto Mono', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        #output-container {
+            flex: 1;
+            overflow: auto;
+            padding: 15px;
+            padding-top: 50px;
+            font-family: 'SF Mono', 'Monaco', 'Roboto Mono', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: 15px;
+            line-height: 1.5;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        #output-container {
+            color: #d4d4d4;
+        }
+
+        .error-message {
+            padding: 10px 15px;
+            background: #ff9800;
+            color: #000;
+            font-size: 0.9em;
+            border-bottom: 1px solid #e68900;
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .error-highlight {
+            background: #ff9800 !important;
+        }
+
+        .line-error {
+            background: rgba(255, 152, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Jinja2 Template Tester</h1>
+        <p class="subtitle">Real-time template rendering with syntax highlighting</p>
+    </header>
+
+    <div class="main-container">
+        <div class="panel">
+            <div class="panel-header">Variables (YAML/JSON)</div>
+            <div class="editor-container">
+                <textarea id="variables"></textarea>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Template</div>
+            <div id="template-error-container"></div>
+            <div class="editor-container">
+                <textarea id="template"></textarea>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Output</div>
+            <div id="output-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize CodeMirror editors
+        const variablesEditor = CodeMirror.fromTextArea(document.getElementById('variables'), {
+            mode: 'yaml',
+            theme: 'monokai',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2
+        });
+
+        const templateEditor = CodeMirror.fromTextArea(document.getElementById('template'), {
+            mode: 'jinja2',
+            theme: 'monokai',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2
+        });
+
+        const outputContainer = document.getElementById('output-container');
+        const errorContainer = document.getElementById('template-error-container');
+
+        let renderInProgress = false;
+        let renderQueued = false;
+        let rawOutputText = ''; // Store raw text for copying
+
+        // HTML escape function
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Syntax highlighting for network configs (SecureCRT style)
+        function highlightNetworkConfig(line) {
+            const trimmed = line.trim();
+
+            // Empty lines or just whitespace
+            if (!trimmed) {
+                return escapeHtml(line);
+            }
+
+            // Comments/separators (!) - Dark gray
+            if (trimmed === '!' || trimmed.startsWith('#')) {
+                return `<span style="color: #808080;">${escapeHtml(line)}</span>`;
+            }
+
+            // Interface declarations - Cyan/bright blue
+            if (trimmed.match(/^interface\s+/i)) {
+                return `<span style="color: #00d7ff; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+
+            // Description lines - Green
+            if (trimmed.match(/^\s*description\s+/i)) {
+                return `<span style="color: #00ff00;">${escapeHtml(line)}</span>`;
+            }
+
+            // IP addresses - Yellow
+            if (trimmed.match(/^\s*ip\s+(address|route)/i)) {
+                const highlighted = escapeHtml(line).replace(/(\d+\.\d+\.\d+\.\d+)/g,
+                    '<span style="color: #ffff00;">$1</span>');
+                return `<span style="color: #d4d4d4;">${highlighted}</span>`;
+            }
+
+            // Switchport commands - Magenta
+            if (trimmed.match(/^\s*switchport/i)) {
+                return `<span style="color: #ff00ff;">${escapeHtml(line)}</span>`;
+            }
+
+            // VLAN - Orange
+            if (trimmed.match(/^\s*(vlan|encapsulation)/i)) {
+                const highlighted = escapeHtml(line).replace(/\b(\d+)\b/g,
+                    '<span style="color: #ffa500;">$1</span>');
+                return `<span style="color: #ff8c00;">${highlighted}</span>`;
+            }
+
+            // Channel-group, VPC - Light blue
+            if (trimmed.match(/^\s*(channel-group|vpc|port-channel)/i)) {
+                return `<span style="color: #87ceeb;">${escapeHtml(line)}</span>`;
+            }
+
+            // Spanning-tree - Light green
+            if (trimmed.match(/^\s*spanning-tree/i)) {
+                return `<span style="color: #90ee90;">${escapeHtml(line)}</span>`;
+            }
+
+            // No shutdown/shutdown - Red/Green
+            if (trimmed.match(/^\s*no\s+shutdown/i)) {
+                return `<span style="color: #00ff00; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+            if (trimmed.match(/^\s*shutdown/i)) {
+                return `<span style="color: #ff0000; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+
+            // PTP - Light purple
+            if (trimmed.match(/^\s*ptp/i)) {
+                return `<span style="color: #dda0dd;">${escapeHtml(line)}</span>`;
+            }
+
+            // Router/routing protocol - Bright cyan
+            if (trimmed.match(/^(router|vrf)/i)) {
+                return `<span style="color: #00ffff; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+
+            // Default - light gray
+            return `<span style="color: #d4d4d4;">${escapeHtml(line)}</span>`;
+        }
+
+        async function renderTemplate() {
+            if (renderInProgress) {
+                renderQueued = true;
+                return;
+            }
+
+            renderInProgress = true;
+            const template = templateEditor.getValue();
+            const variables = variablesEditor.getValue();
+
+            // Clear previous errors
+            errorContainer.innerHTML = '';
+            templateEditor.getWrapperElement().classList.remove('error-highlight');
+
+            if (!template && !variables) {
+                outputContainer.textContent = '';
+                renderInProgress = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/render', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        template: template,
+                        variables: variables
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store raw output for copying
+                    rawOutputText = data.output;
+
+                    // Apply syntax highlighting for network configs
+                    // Remove ALL blank/empty lines and trim output
+                    const lines = data.output.trim().split('\n');
+                    const filteredLines = lines.filter(line => line.trim() !== '');
+
+                    const highlightedLines = filteredLines.map(line => highlightNetworkConfig(line));
+                    outputContainer.innerHTML = highlightedLines.join('\n');
+                } else{
+                    // Show error with orange highlighting
+                    outputContainer.textContent = '⚠️ Error:\n' + data.error;
+                    outputContainer.style.color = '#ff9800';
+
+                    // Show error message at top of template panel
+                    errorContainer.innerHTML = '<div class="error-message">⚠️ ' + data.error + '</div>';
+
+                    // Flash template editor
+                    templateEditor.getWrapperElement().classList.add('error-highlight');
+                    setTimeout(() => {
+                        templateEditor.getWrapperElement().classList.remove('error-highlight');
+                    }, 300);
+                }
+            } catch (error) {
+                outputContainer.textContent = '⚠️ Connection Error:\n' + error.message;
+                outputContainer.style.color = '#ff9800';
+            }
+
+            renderInProgress = false;
+
+            // If another render was queued, execute it now
+            if (renderQueued) {
+                renderQueued = false;
+                setTimeout(renderTemplate, 0);
+            }
+        }
+
+        // Instant updates on every change
+        variablesEditor.on('change', () => {
+            renderTemplate();
+        });
+
+        templateEditor.on('change', () => {
+            renderTemplate();
+        });
+
+        // Initial render
+        renderTemplate();
+    </script>
+</body>
+</html>
