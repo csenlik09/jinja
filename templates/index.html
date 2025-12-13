@@ -98,19 +98,21 @@
         }
 
         .copy-button {
-            position: absolute;
-            top: 10px;
-            right: 10px;
+            position: fixed;
+            top: 70px;
+            right: 20px;
             background: #667eea;
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
+            padding: 10px 20px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
+            font-weight: 600;
             font-family: 'Segoe UI', sans-serif;
             transition: background 0.2s, transform 0.1s;
-            z-index: 10;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
         .copy-button:hover {
@@ -184,11 +186,11 @@
 
         <div class="panel">
             <div class="panel-header">Output</div>
-            <div id="output-container">
-                <button class="copy-button" onclick="copyOutput()">📋 Copy</button>
-            </div>
+            <div id="output-container"></div>
         </div>
     </div>
+
+    <button class="copy-button" onclick="copyOutput()">📋 Copy</button>
 
     <script>
         // Initialize CodeMirror editors
@@ -223,41 +225,79 @@
             return div.innerHTML;
         }
 
-        // Syntax highlighting for network configs
+        // Syntax highlighting for network configs (SecureCRT style)
         function highlightNetworkConfig(line) {
             const trimmed = line.trim();
 
-            // Commands - blue
-            if (trimmed.startsWith('interface ') || trimmed.startsWith('router ') ||
-                trimmed.startsWith('vlan ') || trimmed.startsWith('vrf ')) {
-                return `<span style="color: #61afef;">${escapeHtml(line)}</span>`;
+            // Empty lines or just whitespace
+            if (!trimmed) {
+                return escapeHtml(line);
             }
 
-            // Descriptions - green
-            if (trimmed.startsWith('description ')) {
-                return `<span style="color: #98c379;">${escapeHtml(line)}</span>`;
-            }
-
-            // Switchport/routing commands - yellow
-            if (trimmed.startsWith('switchport') || trimmed.startsWith('ip address') ||
-                trimmed.startsWith('channel-group') || trimmed.startsWith('vpc') ||
-                trimmed.startsWith('spanning-tree') || trimmed.startsWith('no shutdown') ||
-                trimmed.startsWith('shutdown') || trimmed.startsWith('ptp')) {
-                return `<span style="color: #e5c07b;">${escapeHtml(line)}</span>`;
-            }
-
-            // Comments starting with ! - gray
+            // Comments/separators (!) - Dark gray
             if (trimmed === '!' || trimmed.startsWith('#')) {
-                return `<span style="color: #5c6370;">${escapeHtml(line)}</span>`;
+                return `<span style="color: #808080;">${escapeHtml(line)}</span>`;
             }
 
-            // VLAN numbers and IPs - purple/magenta
-            if (/vlan \d+/.test(trimmed) || /\d+\.\d+\.\d+\.\d+/.test(trimmed)) {
-                return escapeHtml(line).replace(/(\d+\.\d+\.\d+\.\d+)/g, '<span style="color: #c678dd;">$1</span>')
-                                       .replace(/vlan (\d+)/g, 'vlan <span style="color: #c678dd;">$1</span>');
+            // Interface declarations - Cyan/bright blue
+            if (trimmed.match(/^interface\s+/i)) {
+                return `<span style="color: #00d7ff; font-weight: bold;">${escapeHtml(line)}</span>`;
             }
 
-            return escapeHtml(line);
+            // Description lines - Green
+            if (trimmed.match(/^\s*description\s+/i)) {
+                return `<span style="color: #00ff00;">${escapeHtml(line)}</span>`;
+            }
+
+            // IP addresses - Yellow
+            if (trimmed.match(/^\s*ip\s+(address|route)/i)) {
+                const highlighted = escapeHtml(line).replace(/(\d+\.\d+\.\d+\.\d+)/g,
+                    '<span style="color: #ffff00;">$1</span>');
+                return `<span style="color: #d4d4d4;">${highlighted}</span>`;
+            }
+
+            // Switchport commands - Magenta
+            if (trimmed.match(/^\s*switchport/i)) {
+                return `<span style="color: #ff00ff;">${escapeHtml(line)}</span>`;
+            }
+
+            // VLAN - Orange
+            if (trimmed.match(/^\s*(vlan|encapsulation)/i)) {
+                const highlighted = escapeHtml(line).replace(/\b(\d+)\b/g,
+                    '<span style="color: #ffa500;">$1</span>');
+                return `<span style="color: #ff8c00;">${highlighted}</span>`;
+            }
+
+            // Channel-group, VPC - Light blue
+            if (trimmed.match(/^\s*(channel-group|vpc|port-channel)/i)) {
+                return `<span style="color: #87ceeb;">${escapeHtml(line)}</span>`;
+            }
+
+            // Spanning-tree - Light green
+            if (trimmed.match(/^\s*spanning-tree/i)) {
+                return `<span style="color: #90ee90;">${escapeHtml(line)}</span>`;
+            }
+
+            // No shutdown/shutdown - Red/Green
+            if (trimmed.match(/^\s*no\s+shutdown/i)) {
+                return `<span style="color: #00ff00; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+            if (trimmed.match(/^\s*shutdown/i)) {
+                return `<span style="color: #ff0000; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+
+            // PTP - Light purple
+            if (trimmed.match(/^\s*ptp/i)) {
+                return `<span style="color: #dda0dd;">${escapeHtml(line)}</span>`;
+            }
+
+            // Router/routing protocol - Bright cyan
+            if (trimmed.match(/^(router|vrf)/i)) {
+                return `<span style="color: #00ffff; font-weight: bold;">${escapeHtml(line)}</span>`;
+            }
+
+            // Default - light gray
+            return `<span style="color: #d4d4d4;">${escapeHtml(line)}</span>`;
         }
 
         async function renderTemplate() {
@@ -341,11 +381,9 @@
 
         // Copy output function
         function copyOutput() {
-            const output = outputContainer.textContent;
+            // Get pure text content without HTML tags
+            const textToCopy = outputContainer.innerText || outputContainer.textContent;
             const copyButton = document.querySelector('.copy-button');
-
-            // Remove the button text from output before copying
-            const textToCopy = output.replace('📋 Copy', '').trim();
 
             navigator.clipboard.writeText(textToCopy).then(() => {
                 // Visual feedback
