@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jinja2 Template Tester</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/jinja2/jinja2.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -49,6 +54,7 @@
             flex-direction: column;
             border-right: 1px solid #333;
             background: #252526;
+            overflow: hidden;
         }
 
         .panel:last-child {
@@ -64,50 +70,25 @@
             font-size: 0.9em;
         }
 
-        textarea {
+        .editor-container {
             flex: 1;
-            width: 100%;
-            border: none;
+            overflow: auto;
+        }
+
+        .CodeMirror {
+            height: 100%;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        #output-container {
+            flex: 1;
+            overflow: auto;
             padding: 15px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 13px;
-            resize: none;
             background: #1e1e1e;
             color: #d4d4d4;
-        }
-
-        textarea:focus {
-            outline: none;
-        }
-
-        #template {
-            background: #1e1e1e;
-        }
-
-        #template.error {
-            background: #332200;
-        }
-
-        #template.error-highlight {
-            animation: flash-orange 0.5s;
-        }
-
-        @keyframes flash-orange {
-            0%, 100% { background: #1e1e1e; }
-            50% { background: #ff9800; }
-        }
-
-        #output {
-            background: #252526;
-            color: #d4d4d4;
-        }
-
-        .error-line {
-            background: #ff9800;
-            color: #000;
-        }
-
-        pre {
             white-space: pre-wrap;
             word-wrap: break-word;
         }
@@ -118,52 +99,100 @@
             color: #000;
             font-size: 0.9em;
             border-bottom: 1px solid #e68900;
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .error-highlight {
+            background: #ff9800 !important;
+        }
+
+        .line-error {
+            background: rgba(255, 152, 0, 0.2);
         }
     </style>
 </head>
 <body>
     <header>
         <h1>Jinja2 Template Tester</h1>
-        <p class="subtitle">Real-time template rendering</p>
+        <p class="subtitle">Real-time template rendering with syntax highlighting</p>
     </header>
 
     <div class="main-container">
         <div class="panel">
             <div class="panel-header">Variables (YAML/JSON)</div>
-            <textarea id="variables" placeholder="# Enter variables here
-name: World
-age: 30" spellcheck="false"></textarea>
+            <div class="editor-container">
+                <textarea id="variables"></textarea>
+            </div>
         </div>
 
         <div class="panel">
             <div class="panel-header">Template</div>
-            <div id="error-container"></div>
-            <textarea id="template" placeholder="Hello {{ name }}!" spellcheck="false"></textarea>
+            <div id="template-error-container"></div>
+            <div class="editor-container">
+                <textarea id="template"></textarea>
+            </div>
         </div>
 
         <div class="panel">
             <div class="panel-header">Output</div>
-            <textarea id="output" readonly placeholder="Output will appear here as you type..."></textarea>
+            <div id="output-container"></div>
         </div>
     </div>
 
     <script>
-        let renderTimeout;
-        const templateEl = document.getElementById('template');
-        const variablesEl = document.getElementById('variables');
-        const outputEl = document.getElementById('output');
-        const errorContainer = document.getElementById('error-container');
+        // Initialize CodeMirror editors
+        const variablesEditor = CodeMirror.fromTextArea(document.getElementById('variables'), {
+            mode: 'yaml',
+            theme: 'monokai',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2
+        });
+
+        const templateEditor = CodeMirror.fromTextArea(document.getElementById('template'), {
+            mode: 'jinja2',
+            theme: 'monokai',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2
+        });
+
+        const outputContainer = document.getElementById('output-container');
+        const errorContainer = document.getElementById('template-error-container');
+
+        let renderInProgress = false;
+        let renderQueued = false;
 
         async function renderTemplate() {
-            const template = templateEl.value;
-            const variables = variablesEl.value;
+            if (renderInProgress) {
+                renderQueued = true;
+                return;
+            }
+
+            renderInProgress = true;
+            const template = templateEditor.getValue();
+            const variables = variablesEditor.getValue();
 
             // Clear previous errors
-            templateEl.classList.remove('error', 'error-highlight');
             errorContainer.innerHTML = '';
+            templateEditor.getWrapperElement().classList.remove('error-highlight');
 
-            if (!template) {
-                outputEl.value = '';
+            if (!template && !variables) {
+                outputContainer.textContent = '';
+                renderInProgress = false;
                 return;
             }
 
@@ -182,38 +211,47 @@ age: 30" spellcheck="false"></textarea>
                 const data = await response.json();
 
                 if (data.success) {
-                    outputEl.value = data.output;
+                    outputContainer.textContent = data.output;
+                    outputContainer.style.color = '#d4d4d4';
                 } else {
                     // Show error with orange highlighting
-                    outputEl.value = '⚠️ Error:\n' + data.error;
-                    templateEl.classList.add('error-highlight');
+                    outputContainer.textContent = '⚠️ Error:\n' + data.error;
+                    outputContainer.style.color = '#ff9800';
 
                     // Show error message at top of template panel
                     errorContainer.innerHTML = '<div class="error-message">⚠️ ' + data.error + '</div>';
 
-                    // Highlight template temporarily
+                    // Flash template editor
+                    templateEditor.getWrapperElement().classList.add('error-highlight');
                     setTimeout(() => {
-                        templateEl.classList.remove('error-highlight');
-                    }, 500);
+                        templateEditor.getWrapperElement().classList.remove('error-highlight');
+                    }, 300);
                 }
             } catch (error) {
-                outputEl.value = '⚠️ Connection Error:\n' + error.message;
+                outputContainer.textContent = '⚠️ Connection Error:\n' + error.message;
+                outputContainer.style.color = '#ff9800';
+            }
+
+            renderInProgress = false;
+
+            // If another render was queued, execute it now
+            if (renderQueued) {
+                renderQueued = false;
+                setTimeout(renderTemplate, 0);
             }
         }
 
-        // Real-time rendering with debounce
-        function scheduleRender() {
-            clearTimeout(renderTimeout);
-            renderTimeout = setTimeout(renderTemplate, 500);
-        }
-
-        templateEl.addEventListener('input', scheduleRender);
-        variablesEl.addEventListener('input', scheduleRender);
-
-        // Initial render if there's any content
-        if (templateEl.value || variablesEl.value) {
+        // Instant updates on every change
+        variablesEditor.on('change', () => {
             renderTemplate();
-        }
+        });
+
+        templateEditor.on('change', () => {
+            renderTemplate();
+        });
+
+        // Initial render
+        renderTemplate();
     </script>
 </body>
 </html>
