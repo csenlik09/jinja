@@ -306,24 +306,9 @@
                     rawOutputText = data.output;
 
                     // Apply syntax highlighting for network configs
-                    // Remove excessive blank lines (more than 1 consecutive blank line)
+                    // Remove ALL blank lines for compact display
                     const lines = data.output.split('\n');
-                    const filteredLines = [];
-                    let consecutiveBlankLines = 0;
-
-                    for (let i = 0; i < lines.length; i++) {
-                        const line = lines[i];
-                        if (line.trim() === '') {
-                            consecutiveBlankLines++;
-                            // Only allow max 1 consecutive blank line
-                            if (consecutiveBlankLines <= 1) {
-                                filteredLines.push(line);
-                            }
-                        } else {
-                            consecutiveBlankLines = 0;
-                            filteredLines.push(line);
-                        }
-                    }
+                    const filteredLines = lines.filter(line => line.trim() !== '');
 
                     const highlightedLines = filteredLines.map(line => highlightNetworkConfig(line));
                     outputContainer.innerHTML = highlightedLines.join('\n');
