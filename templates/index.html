@@ -217,6 +217,7 @@
 
         let renderInProgress = false;
         let renderQueued = false;
+        let rawOutputText = ''; // Store raw text for copying
 
         // HTML escape function
         function escapeHtml(text) {
@@ -335,6 +336,9 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Store raw output for copying
+                    rawOutputText = data.output;
+
                     // Apply syntax highlighting for network configs
                     const lines = data.output.split('\n');
                     const highlightedLines = lines.map(line => highlightNetworkConfig(line));
@@ -381,11 +385,18 @@
 
         // Copy output function
         function copyOutput() {
-            // Get pure text content without HTML tags
-            const textToCopy = outputContainer.innerText || outputContainer.textContent;
             const copyButton = document.querySelector('.copy-button');
 
-            navigator.clipboard.writeText(textToCopy).then(() => {
+            // Use stored raw text
+            if (!rawOutputText) {
+                copyButton.innerHTML = '⚠️ No output';
+                setTimeout(() => {
+                    copyButton.innerHTML = '📋 Copy';
+                }, 2000);
+                return;
+            }
+
+            navigator.clipboard.writeText(rawOutputText).then(() => {
                 // Visual feedback
                 const originalText = copyButton.innerHTML;
                 copyButton.innerHTML = '✓ Copied!';
