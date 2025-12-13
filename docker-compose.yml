@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  jinja-app:
+    build: .
+    container_name: jinja-template-app
+    ports:
+      - "80:80"
+    volumes:
+      - ./templates:/app/templates
+      - ./examples:/app/examples
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

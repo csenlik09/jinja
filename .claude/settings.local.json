@@ -4,7 +4,15 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Add Jinja2 template project structure\n\n- Add README with project overview and usage instructions\n- Add requirements.txt with Jinja2 dependency\n- Add .gitignore for Python projects\n- Add example scripts demonstrating basic templating and file loading\n- Add sample templates (HTML and email text)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(ssh:*)",
+      "Bash(test:*)",
+      "Bash(ssh-keygen:*)",
+      "Bash(ssh-copy-id:*)",
+      "Bash(scp:*)"
     ],
     "deny": [],
     "ask": []
