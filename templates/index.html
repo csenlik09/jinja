@@ -97,38 +97,6 @@
             position: relative;
         }
 
-        .copy-button {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: 'Segoe UI', sans-serif;
-            transition: background 0.2s, transform 0.1s;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-
-        .copy-button:hover {
-            background: #764ba2;
-            transform: translateY(-1px);
-        }
-
-        .copy-button:active {
-            transform: translateY(0);
-        }
-
-        .copy-button.copied {
-            background: #4caf50;
-        }
-
-        /* Make comments/descriptions green in output */
         #output-container {
             color: #d4d4d4;
         }
@@ -189,8 +157,6 @@
             <div id="output-container"></div>
         </div>
     </div>
-
-    <button class="copy-button" onclick="copyOutput()">📋 Copy</button>
 
     <script>
         // Initialize CodeMirror editors
@@ -382,38 +348,6 @@
 
         // Initial render
         renderTemplate();
-
-        // Copy output function
-        function copyOutput() {
-            const copyButton = document.querySelector('.copy-button');
-
-            // Use stored raw text
-            if (!rawOutputText) {
-                copyButton.innerHTML = '⚠️ No output';
-                setTimeout(() => {
-                    copyButton.innerHTML = '📋 Copy';
-                }, 2000);
-                return;
-            }
-
-            navigator.clipboard.writeText(rawOutputText).then(() => {
-                // Visual feedback
-                const originalText = copyButton.innerHTML;
-                copyButton.innerHTML = '✓ Copied!';
-                copyButton.classList.add('copied');
-
-                setTimeout(() => {
-                    copyButton.innerHTML = originalText;
-                    copyButton.classList.remove('copied');
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                copyButton.innerHTML = '✗ Failed';
-                setTimeout(() => {
-                    copyButton.innerHTML = '📋 Copy';
-                }, 2000);
-            });
-        }
     </script>
 </body>
 </html>
