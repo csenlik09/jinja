@@ -77,20 +77,58 @@
 
         .CodeMirror {
             height: 100%;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 13px;
+            font-family: 'SF Mono', 'Monaco', 'Roboto Mono', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: 15px;
+            line-height: 1.5;
         }
 
         #output-container {
             flex: 1;
             overflow: auto;
             padding: 15px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 13px;
+            padding-top: 50px;
+            font-family: 'SF Mono', 'Monaco', 'Roboto Mono', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: 15px;
+            line-height: 1.5;
             background: #1e1e1e;
             color: #d4d4d4;
             white-space: pre-wrap;
             word-wrap: break-word;
+            position: relative;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Segoe UI', sans-serif;
+            transition: background 0.2s, transform 0.1s;
+            z-index: 10;
+        }
+
+        .copy-button:hover {
+            background: #764ba2;
+            transform: translateY(-1px);
+        }
+
+        .copy-button:active {
+            transform: translateY(0);
+        }
+
+        .copy-button.copied {
+            background: #4caf50;
+        }
+
+        /* Make comments/descriptions green in output */
+        #output-container {
+            color: #d4d4d4;
         }
 
         .error-message {
@@ -146,7 +184,9 @@
 
         <div class="panel">
             <div class="panel-header">Output</div>
-            <div id="output-container"></div>
+            <div id="output-container">
+                <button class="copy-button" onclick="copyOutput()">📋 Copy</button>
+            </div>
         </div>
     </div>
 
@@ -175,6 +215,50 @@
 
         let renderInProgress = false;
         let renderQueued = false;
+
+        // HTML escape function
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Syntax highlighting for network configs
+        function highlightNetworkConfig(line) {
+            const trimmed = line.trim();
+
+            // Commands - blue
+            if (trimmed.startsWith('interface ') || trimmed.startsWith('router ') ||
+                trimmed.startsWith('vlan ') || trimmed.startsWith('vrf ')) {
+                return `<span style="color: #61afef;">${escapeHtml(line)}</span>`;
+            }
+
+            // Descriptions - green
+            if (trimmed.startsWith('description ')) {
+                return `<span style="color: #98c379;">${escapeHtml(line)}</span>`;
+            }
+
+            // Switchport/routing commands - yellow
+            if (trimmed.startsWith('switchport') || trimmed.startsWith('ip address') ||
+                trimmed.startsWith('channel-group') || trimmed.startsWith('vpc') ||
+                trimmed.startsWith('spanning-tree') || trimmed.startsWith('no shutdown') ||
+                trimmed.startsWith('shutdown') || trimmed.startsWith('ptp')) {
+                return `<span style="color: #e5c07b;">${escapeHtml(line)}</span>`;
+            }
+
+            // Comments starting with ! - gray
+            if (trimmed === '!' || trimmed.startsWith('#')) {
+                return `<span style="color: #5c6370;">${escapeHtml(line)}</span>`;
+            }
+
+            // VLAN numbers and IPs - purple/magenta
+            if (/vlan \d+/.test(trimmed) || /\d+\.\d+\.\d+\.\d+/.test(trimmed)) {
+                return escapeHtml(line).replace(/(\d+\.\d+\.\d+\.\d+)/g, '<span style="color: #c678dd;">$1</span>')
+                                       .replace(/vlan (\d+)/g, 'vlan <span style="color: #c678dd;">$1</span>');
+            }
+
+            return escapeHtml(line);
+        }
 
         async function renderTemplate() {
             if (renderInProgress) {
@@ -211,8 +295,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    outputContainer.textContent = data.output;
-                    outputContainer.style.color = '#d4d4d4';
+                    // Apply syntax highlighting for network configs
+                    const lines = data.output.split('\n');
+                    const highlightedLines = lines.map(line => highlightNetworkConfig(line));
+                    outputContainer.innerHTML = highlightedLines.join('\n');
                 } else {
                     // Show error with orange highlighting
                     outputContainer.textContent = '⚠️ Error:\n' + data.error;
@@ -252,6 +338,33 @@
 
         // Initial render
         renderTemplate();
+
+        // Copy output function
+        function copyOutput() {
+            const output = outputContainer.textContent;
+            const copyButton = document.querySelector('.copy-button');
+
+            // Remove the button text from output before copying
+            const textToCopy = output.replace('📋 Copy', '').trim();
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // Visual feedback
+                const originalText = copyButton.innerHTML;
+                copyButton.innerHTML = '✓ Copied!';
+                copyButton.classList.add('copied');
+
+                setTimeout(() => {
+                    copyButton.innerHTML = originalText;
+                    copyButton.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                copyButton.innerHTML = '✗ Failed';
+                setTimeout(() => {
+                    copyButton.innerHTML = '📋 Copy';
+                }, 2000);
+            });
+        }
     </script>
 </body>
 </html>
