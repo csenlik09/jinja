@@ -1,0 +1,28 @@
+{
+  "name_leaf_a": "LEAF041501.EWR1",
+  "name_leaf_b": "LEAF041502.EWR1",
+  "name_oob": "OSW0415.EWR1",
+  "host_type": "SEG",
+  "host_type_2": "LIN01",
+  "host_port_a": "AIOM_01",
+  "host_port_b": "P1/1",
+  "details": {
+    "role": "Leaf",
+    "location": "EWR1",
+    "software": "NXOS",
+    "side": "A"
+  },
+  "interfaces": {
+    "description_start": 1,
+    "ethernet_start": 21,
+    "ethernet_end": 24,
+    "port_channel_start": 321,
+    "port_channel_end": 324,
+    "oob_ethernet_start": 14,
+    "oob_ethernet_end": 17,
+    "trunk_vlan": 1202,
+    "oob_vlan": 302,
+    "ptp_vlan": 3001,
+    "xc_type_number": ""
+  }
+}

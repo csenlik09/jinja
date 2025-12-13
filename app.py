@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from jinja2 import Template, TemplateSyntaxError, UndefinedError
 import json
+import yaml
 
 app = Flask(__name__)
 
@@ -15,16 +16,23 @@ def render_jinja():
         template_str = data.get('template', '')
         variables_str = data.get('variables', '{}')
 
-        # Parse variables (support both JSON and key=value format)
+        # Parse variables (support JSON, YAML, and key=value format)
         try:
+            # First try JSON
             variables = json.loads(variables_str)
         except json.JSONDecodeError:
-            # Try to parse as key=value pairs
-            variables = {}
-            for line in variables_str.strip().split('\n'):
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    variables[key.strip()] = value.strip()
+            try:
+                # Then try YAML
+                variables = yaml.safe_load(variables_str)
+                if variables is None:
+                    variables = {}
+            except yaml.YAMLError:
+                # Finally try key=value pairs
+                variables = {}
+                for line in variables_str.strip().split('\n'):
+                    if '=' in line and not line.strip().startswith('#'):
+                        key, value = line.split('=', 1)
+                        variables[key.strip()] = value.strip()
 
         # Create and render template
         template = Template(template_str)
