@@ -487,31 +487,31 @@
                 </div>
                 <div class="filter-section">
                     <div class="filter-row">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <label style="color: #999; font-size: 0.85em;">Host Type</label>
-                            <button class="button" onclick="showHostTypeManager()" style="padding: 3px 8px; margin: 0; font-size: 0.75em;">Manage</button>
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Host Type</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterHostType" onchange="filterTemplates()" style="flex: 1;">
+                                <option value="">All Host Types</option>
+                            </select>
+                            <button class="button" onclick="showHostTypeManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
                         </div>
-                        <select class="form-select" id="filterHostType" onchange="filterTemplates()">
-                            <option value="">All Host Types</option>
-                        </select>
                     </div>
                     <div class="filter-row">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <label style="color: #999; font-size: 0.85em;">Switch Vendor</label>
-                            <button class="button" onclick="showVendorManager()" style="padding: 3px 8px; margin: 0; font-size: 0.75em;">Manage</button>
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Switch Vendor</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterVendor" onchange="updateOSDropdown(); filterTemplates();" style="flex: 1;">
+                                <option value="">All Switch Vendors</option>
+                            </select>
+                            <button class="button" onclick="showVendorManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
                         </div>
-                        <select class="form-select" id="filterVendor" onchange="filterTemplates()">
-                            <option value="">All Switch Vendors</option>
-                        </select>
                     </div>
                     <div class="filter-row">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <label style="color: #999; font-size: 0.85em;">Switch OS</label>
-                            <button class="button" onclick="showOSManager()" style="padding: 3px 8px; margin: 0; font-size: 0.75em;">Manage</button>
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Switch OS</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterOS" onchange="filterTemplates()" style="flex: 1;">
+                                <option value="">All Switch OS</option>
+                            </select>
+                            <button class="button" onclick="showOSManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
                         </div>
-                        <select class="form-select" id="filterOS" onchange="filterTemplates()">
-                            <option value="">All Switch OS</option>
-                        </select>
                     </div>
                     <button class="button" onclick="createNewTemplate()" style="width: 100%;">+ New Template</button>
                 </div>

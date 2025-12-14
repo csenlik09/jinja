@@ -367,16 +367,62 @@ async function initializeTemplateManager() {
 
 async function loadMetadata() {
     try {
-        const [hostTypes, vendors, osTypes] = await Promise.all([
+        const [hostTypes, vendors] = await Promise.all([
             fetch('/api/host-types').then(r => r.json()),
-            fetch('/api/vendors').then(r => r.json()),
-            fetch('/api/os-types').then(r => r.json())
+            fetch('/api/vendors').then(r => r.json())
         ]);
 
         populateSelect('filterHostType', hostTypes);
         populateSelect('filterVendor', vendors);
+        await updateOSDropdown();
     } catch (error) {
         console.error('Error loading metadata:', error);
+    }
+}
+
+async function updateOSDropdown() {
+    const vendorSelect = document.getElementById('filterVendor');
+    const osSelect = document.getElementById('filterOS');
+    const selectedVendor = vendorSelect.value;
+    const currentOS = osSelect.value;
+
+    try {
+        let url = '/api/os-types';
+        if (selectedVendor) {
+            url += '?vendor=' + encodeURIComponent(selectedVendor);
+        }
+
+        const response = await fetch(url);
+        const osTypes = await response.json();
+
+        // Clear current options except the "All" option
+        osSelect.innerHTML = '<option value="">All Switch OS</option>';
+
+        // Populate OS dropdown
+        if (selectedVendor) {
+            // If vendor is selected, osTypes is just an array of OS names
+            osTypes.forEach(os => {
+                const opt = document.createElement('option');
+                opt.value = os;
+                opt.textContent = os;
+                osSelect.appendChild(opt);
+            });
+        } else {
+            // If no vendor selected, show all OS types with vendor prefix
+            osTypes.forEach(os => {
+                const opt = document.createElement('option');
+                opt.value = os.name;
+                opt.textContent = `${os.vendor} - ${os.name}`;
+                osSelect.appendChild(opt);
+            });
+        }
+
+        // Restore previous selection if it still exists
+        if (currentOS) {
+            osSelect.value = currentOS;
+        }
+    } catch (error) {
+        console.error('Error loading OS types:', error);
     }
 }
 
