@@ -18,7 +18,49 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Templates table
+        # Check if templates table exists and needs migration
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='templates'")
+        table_exists = cursor.fetchone()
+
+        if table_exists:
+            # Check if we need to migrate from old schema
+            cursor.execute("PRAGMA table_info(templates)")
+            columns = cursor.fetchall()
+
+            # Check constraints - if old schema, migrate
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='templates'")
+            table_sql = cursor.fetchone()
+            if table_sql and 'UNIQUE(host_type, vendor, os, name)' in table_sql[0]:
+                # Migrate from old schema
+                print("Migrating templates table to new schema...")
+                cursor.execute('''
+                    CREATE TABLE templates_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        host_type TEXT NOT NULL,
+                        vendor TEXT NOT NULL,
+                        os TEXT NOT NULL,
+                        template_content TEXT NOT NULL,
+                        description TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(host_type, vendor, os)
+                    )
+                ''')
+
+                # Copy data - keep only the first template for each combination
+                cursor.execute('''
+                    INSERT INTO templates_new (id, name, host_type, vendor, os, template_content, description, created_at, updated_at)
+                    SELECT MIN(id), name, host_type, vendor, os, template_content, description, created_at, updated_at
+                    FROM templates
+                    GROUP BY host_type, vendor, os
+                ''')
+
+                cursor.execute('DROP TABLE templates')
+                cursor.execute('ALTER TABLE templates_new RENAME TO templates')
+                print("Migration complete!")
+
+        # Templates table - ONE template per host_type/vendor/os combination
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +72,7 @@ class Database:
                 description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(host_type, vendor, os, name)
+                UNIQUE(host_type, vendor, os)
             )
         ''')
 
@@ -124,24 +166,29 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('''
-            INSERT INTO templates (name, host_type, vendor, os, template_content, description)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (name, host_type, vendor, os, template_content, description))
+        try:
+            cursor.execute('''
+                INSERT INTO templates (name, host_type, vendor, os, template_content, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (name, host_type, vendor, os, template_content, description))
 
-        template_id = cursor.lastrowid
+            template_id = cursor.lastrowid
 
-        # Add template fields if provided
-        if fields:
-            for field in fields:
-                cursor.execute('''
-                    INSERT INTO template_fields (template_id, field_name, field_type, required, default_value)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (template_id, field['name'], field['type'], field.get('required', True), field.get('default', '')))
+            # Add template fields if provided
+            if fields:
+                for field in fields:
+                    cursor.execute('''
+                        INSERT INTO template_fields (template_id, field_name, field_type, required, default_value)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (template_id, field['name'], field['type'], field.get('required', True), field.get('default', '')))
 
-        conn.commit()
-        conn.close()
-        return template_id
+            conn.commit()
+            return template_id
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            raise ValueError(f'A template already exists for {host_type}/{vendor}/{os}. Only one template is allowed per combination.')
+        finally:
+            conn.close()
 
     def get_template(self, template_id):
         conn = self.get_connection()
@@ -185,23 +232,31 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        allowed_fields = ['name', 'host_type', 'vendor', 'os', 'template_content', 'description']
-        updates = []
-        values = []
+        try:
+            allowed_fields = ['name', 'host_type', 'vendor', 'os', 'template_content', 'description']
+            updates = []
+            values = []
 
-        for key, value in kwargs.items():
-            if key in allowed_fields:
-                updates.append(f'{key} = ?')
-                values.append(value)
+            for key, value in kwargs.items():
+                if key in allowed_fields:
+                    updates.append(f'{key} = ?')
+                    values.append(value)
 
-        if updates:
-            values.append(datetime.now())
-            values.append(template_id)
-            query = f"UPDATE templates SET {', '.join(updates)}, updated_at = ? WHERE id = ?"
-            cursor.execute(query, values)
+            if updates:
+                values.append(datetime.now())
+                values.append(template_id)
+                query = f"UPDATE templates SET {', '.join(updates)}, updated_at = ? WHERE id = ?"
+                cursor.execute(query, values)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            host_type = kwargs.get('host_type', 'unknown')
+            vendor = kwargs.get('vendor', 'unknown')
+            os = kwargs.get('os', 'unknown')
+            raise ValueError(f'A template already exists for {host_type}/{vendor}/{os}. Only one template is allowed per combination.')
+        finally:
+            conn.close()
 
     def delete_template(self, template_id):
         conn = self.get_connection()
