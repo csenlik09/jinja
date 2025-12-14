@@ -279,7 +279,7 @@ def add_host_type():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/host-types/<name>', methods=['DELETE'])
+@app.route('/api/host-types/<path:name>', methods=['DELETE'])
 def remove_host_type(name):
     try:
         db.remove_host_type(name)
@@ -296,7 +296,7 @@ def add_vendor():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/vendors/<name>', methods=['DELETE'])
+@app.route('/api/vendors/<path:name>', methods=['DELETE'])
 def remove_vendor(name):
     try:
         db.remove_vendor(name)
@@ -313,7 +313,7 @@ def add_os_type():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/os-types/<vendor>/<name>', methods=['DELETE'])
+@app.route('/api/os-types/<path:vendor>/<path:name>', methods=['DELETE'])
 def remove_os_type(vendor, name):
     try:
         db.remove_os_type(vendor, name)
