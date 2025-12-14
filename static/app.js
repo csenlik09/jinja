@@ -625,59 +625,38 @@ function cancelEdit() {
 }
 
 // ========== Metadata Management ==========
-async function showMetadataManager() {
-    document.getElementById('metadataModal').style.display = 'flex';
-    await loadMetadataLists();
+
+// Host Type Manager
+async function showHostTypeManager() {
+    document.getElementById('hostTypeModal').style.display = 'flex';
+    await loadHostTypesList();
 }
 
-function closeMetadataManager() {
-    document.getElementById('metadataModal').style.display = 'none';
+function closeHostTypeManager() {
+    document.getElementById('hostTypeModal').style.display = 'none';
 }
 
-async function loadMetadataLists() {
+async function loadHostTypesList() {
     try {
-        const [hostTypes, vendors, osTypes] = await Promise.all([
-            fetch('/api/host-types').then(r => r.json()),
-            fetch('/api/vendors').then(r => r.json()),
-            fetch('/api/os-types').then(r => r.json())
-        ]);
+        const response = await fetch('/api/host-types');
+        const hostTypes = await response.json();
 
-        // Populate host types list
         document.getElementById('hostTypesList').innerHTML = hostTypes.map(ht => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2d2d30; border-radius: 4px; margin-bottom: 8px;">
                 <span style="color: #ccc;">${ht}</span>
-                <button onclick="removeHostType('${ht}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
+                <button onclick="deleteHostType('${ht.replace(/'/g, "\\'")}')" style="background: #f44336; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
             </div>
-        `).join('');
-
-        // Populate vendors list
-        document.getElementById('vendorsList').innerHTML = vendors.map(v => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
-                <span style="color: #ccc;">${v}</span>
-                <button onclick="removeVendor('${v}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
-            </div>
-        `).join('');
-
-        // Populate OS types list
-        document.getElementById('osList').innerHTML = osTypes.map(os => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #2d2d30; border-radius: 3px; margin-bottom: 5px;">
-                <span style="color: #ccc;">${os.vendor} - ${os.name}</span>
-                <button onclick="removeOS('${os.vendor}', '${os.name}')" style="background: #f44336; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">×</button>
-            </div>
-        `).join('');
-
-        // Populate vendor dropdown for OS
-        const vendorSelect = document.getElementById('newOSVendor');
-        vendorSelect.innerHTML = '<option value="">Select vendor</option>' +
-            vendors.map(v => `<option value="${v}">${v}</option>`).join('');
-
+        `).join('') || '<div style="color: #999; padding: 20px; text-align: center;">No host types</div>';
     } catch (error) {
-        console.error('Error loading metadata lists:', error);
+        console.error('Error loading host types:', error);
+        alert('Error loading host types: ' + error.message);
     }
 }
 
-async function addNewHostType() {
-    const name = document.getElementById('newHostType').value.trim();
+async function addHostType() {
+    const input = document.getElementById('newHostType');
+    const name = input.value.trim();
+
     if (!name) {
         alert('Please enter a host type name');
         return;
@@ -693,19 +672,19 @@ async function addNewHostType() {
         const result = await response.json();
 
         if (result.success) {
-            document.getElementById('newHostType').value = '';
-            await loadMetadataLists();
+            input.value = '';
+            await loadHostTypesList();
             await loadMetadata();
         } else {
-            alert('Error adding host type: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error adding host type: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
 
-async function removeHostType(name) {
-    if (!confirm(`Remove host type "${name}"? This may affect existing templates.`)) return;
+async function deleteHostType(name) {
+    if (!confirm(`Delete "${name}"? This may affect existing templates.`)) return;
 
     try {
         const response = await fetch('/api/host-types/delete', {
@@ -714,27 +693,51 @@ async function removeHostType(name) {
             body: JSON.stringify({name})
         });
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error('Server error: ' + text);
-        }
-
         const result = await response.json();
 
         if (result.success) {
-            await loadMetadataLists();
+            await loadHostTypesList();
             await loadMetadata();
             await loadTemplates();
         } else {
-            alert('Error removing host type: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error removing host type: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
 
-async function addNewVendor() {
-    const name = document.getElementById('newVendor').value.trim();
+// Vendor Manager
+async function showVendorManager() {
+    document.getElementById('vendorModal').style.display = 'flex';
+    await loadVendorsList();
+}
+
+function closeVendorManager() {
+    document.getElementById('vendorModal').style.display = 'none';
+}
+
+async function loadVendorsList() {
+    try {
+        const response = await fetch('/api/vendors');
+        const vendors = await response.json();
+
+        document.getElementById('vendorsList').innerHTML = vendors.map(v => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2d2d30; border-radius: 4px; margin-bottom: 8px;">
+                <span style="color: #ccc;">${v}</span>
+                <button onclick="deleteVendor('${v.replace(/'/g, "\\'")}')" style="background: #f44336; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
+            </div>
+        `).join('') || '<div style="color: #999; padding: 20px; text-align: center;">No vendors</div>';
+    } catch (error) {
+        console.error('Error loading vendors:', error);
+        alert('Error loading vendors: ' + error.message);
+    }
+}
+
+async function addVendor() {
+    const input = document.getElementById('newVendor');
+    const name = input.value.trim();
+
     if (!name) {
         alert('Please enter a vendor name');
         return;
@@ -750,19 +753,19 @@ async function addNewVendor() {
         const result = await response.json();
 
         if (result.success) {
-            document.getElementById('newVendor').value = '';
-            await loadMetadataLists();
+            input.value = '';
+            await loadVendorsList();
             await loadMetadata();
         } else {
-            alert('Error adding vendor: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error adding vendor: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
 
-async function removeVendor(name) {
-    if (!confirm(`Remove vendor "${name}"? This may affect existing templates.`)) return;
+async function deleteVendor(name) {
+    if (!confirm(`Delete "${name}"? This may affect existing templates.`)) return;
 
     try {
         const response = await fetch('/api/vendors/delete', {
@@ -771,28 +774,66 @@ async function removeVendor(name) {
             body: JSON.stringify({name})
         });
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error('Server error: ' + text);
-        }
-
         const result = await response.json();
 
         if (result.success) {
-            await loadMetadataLists();
+            await loadVendorsList();
             await loadMetadata();
             await loadTemplates();
         } else {
-            alert('Error removing vendor: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error removing vendor: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
 
-async function addNewOS() {
-    const vendor = document.getElementById('newOSVendor').value;
-    const name = document.getElementById('newOS').value.trim();
+// OS Manager
+async function showOSManager() {
+    document.getElementById('osModal').style.display = 'flex';
+    await loadOSList();
+    await loadOSVendorDropdown();
+}
+
+function closeOSManager() {
+    document.getElementById('osModal').style.display = 'none';
+}
+
+async function loadOSList() {
+    try {
+        const response = await fetch('/api/os-types');
+        const osTypes = await response.json();
+
+        document.getElementById('osList').innerHTML = osTypes.map(os => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2d2d30; border-radius: 4px; margin-bottom: 8px;">
+                <span style="color: #ccc;">${os.vendor} - ${os.name}</span>
+                <button onclick="deleteOS('${os.vendor.replace(/'/g, "\\'")}', '${os.name.replace(/'/g, "\\'")}')" style="background: #f44336; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
+            </div>
+        `).join('') || '<div style="color: #999; padding: 20px; text-align: center;">No OS types</div>';
+    } catch (error) {
+        console.error('Error loading OS types:', error);
+        alert('Error loading OS types: ' + error.message);
+    }
+}
+
+async function loadOSVendorDropdown() {
+    try {
+        const response = await fetch('/api/vendors');
+        const vendors = await response.json();
+
+        const select = document.getElementById('newOSVendor');
+        select.innerHTML = '<option value="">Select vendor</option>' +
+            vendors.map(v => `<option value="${v}">${v}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading vendors:', error);
+    }
+}
+
+async function addOS() {
+    const vendorSelect = document.getElementById('newOSVendor');
+    const input = document.getElementById('newOS');
+    const vendor = vendorSelect.value;
+    const name = input.value.trim();
 
     if (!vendor) {
         alert('Please select a vendor');
@@ -814,19 +855,19 @@ async function addNewOS() {
         const result = await response.json();
 
         if (result.success) {
-            document.getElementById('newOS').value = '';
-            await loadMetadataLists();
+            input.value = '';
+            await loadOSList();
             await loadMetadata();
         } else {
-            alert('Error adding OS type: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error adding OS type: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
 
-async function removeOS(vendor, name) {
-    if (!confirm(`Remove OS "${vendor} - ${name}"? This may affect existing templates.`)) return;
+async function deleteOS(vendor, name) {
+    if (!confirm(`Delete "${vendor} - ${name}"? This may affect existing templates.`)) return;
 
     try {
         const response = await fetch('/api/os-types/delete', {
@@ -835,21 +876,16 @@ async function removeOS(vendor, name) {
             body: JSON.stringify({vendor, name})
         });
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error('Server error: ' + text);
-        }
-
         const result = await response.json();
 
         if (result.success) {
-            await loadMetadataLists();
+            await loadOSList();
             await loadMetadata();
             await loadTemplates();
         } else {
-            alert('Error removing OS type: ' + result.error);
+            alert('Error: ' + result.error);
         }
     } catch (error) {
-        alert('Error removing OS type: ' + error.message);
+        alert('Error: ' + error.message);
     }
 }
