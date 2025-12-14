@@ -708,9 +708,10 @@ async function removeHostType(name) {
     if (!confirm(`Remove host type "${name}"? This may affect existing templates.`)) return;
 
     try {
-        const response = await fetch('/api/host-types/' + encodeURIComponent(name), {
-            method: 'DELETE',
-            headers: {'Content-Type': 'application/json'}
+        const response = await fetch('/api/host-types/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
         });
 
         if (!response.ok) {
@@ -764,9 +765,10 @@ async function removeVendor(name) {
     if (!confirm(`Remove vendor "${name}"? This may affect existing templates.`)) return;
 
     try {
-        const response = await fetch('/api/vendors/' + encodeURIComponent(name), {
-            method: 'DELETE',
-            headers: {'Content-Type': 'application/json'}
+        const response = await fetch('/api/vendors/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
         });
 
         if (!response.ok) {
@@ -827,9 +829,10 @@ async function removeOS(vendor, name) {
     if (!confirm(`Remove OS "${vendor} - ${name}"? This may affect existing templates.`)) return;
 
     try {
-        const response = await fetch('/api/os-types/' + encodeURIComponent(vendor) + '/' + encodeURIComponent(name), {
-            method: 'DELETE',
-            headers: {'Content-Type': 'application/json'}
+        const response = await fetch('/api/os-types/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({vendor, name})
         });
 
         if (!response.ok) {
