@@ -430,6 +430,7 @@
         <button class="tab-button active" onclick="switchTab('config-generator')">Config Generator</button>
         <button class="tab-button" onclick="switchTab('template-manager')">Manage Templates</button>
         <button class="tab-button" onclick="switchTab('jinja-tester')">Jinja Tester</button>
+        <button class="tab-button" onclick="switchTab('logs')">Logs</button>
     </div>
 
     <!-- Jinja Tester Tab -->
@@ -537,6 +538,47 @@
         </div>
     </div>
 
+    <!-- Logs Tab -->
+    <div id="logs" class="tab-content">
+        <div style="display: flex; flex: 1; overflow: hidden; flex-direction: column; padding: 20px;">
+            <div style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h2 style="color: #667eea; margin: 0;">Application Logs</h2>
+                    <button class="button button-secondary" onclick="refreshLogs()">🔄 Refresh</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="logSearch" class="form-input" placeholder="Search logs..." onkeyup="filterLogs()" style="width: 250px;">
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <label style="color: #999; font-size: 0.9em;">From:</label>
+                        <div onclick="document.getElementById('logStartTime').showPicker()" style="position: relative; width: 200px; cursor: pointer;">
+                            <input type="datetime-local" id="logStartTime" onchange="updateDateDisplay('logStartTime', 'logStartDisplay'); filterLogs()" style="position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer;">
+                            <div id="logStartDisplay" class="form-input" style="width: 100%; color: #666; pointer-events: none;">Select date/time...</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <label style="color: #999; font-size: 0.9em;">To:</label>
+                        <div onclick="document.getElementById('logEndTime').showPicker()" style="position: relative; width: 200px; cursor: pointer;">
+                            <input type="datetime-local" id="logEndTime" onchange="updateDateDisplay('logEndTime', 'logEndDisplay'); filterLogs()" style="position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer;">
+                            <div id="logEndDisplay" class="form-input" style="width: 100%; color: #666; pointer-events: none;">Select date/time...</div>
+                        </div>
+                    </div>
+                    <button class="button button-secondary" onclick="clearTimeFilters()" style="padding: 8px 12px;">Clear Dates</button>
+                    <select id="logLevel" class="form-select" onchange="filterLogs()" style="width: 120px;">
+                        <option value="all">All Levels</option>
+                        <option value="INFO">Info</option>
+                        <option value="WARNING">Warning</option>
+                        <option value="ERROR">Error</option>
+                        <option value="DEBUG">Debug</option>
+                    </select>
+                    <span style="color: #666; font-size: 0.85em; margin-left: auto;">Times in UTC</span>
+                </div>
+            </div>
+            <div id="logsContainer" style="flex: 1; overflow: auto; background: #1e1e1e; border: 1px solid #333; border-radius: 4px; padding: 15px; font-family: 'Consolas', monospace; font-size: 13px; color: #ccc;">
+                <div style="color: #999; text-align: center; padding: 20px;">Loading logs...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Host Type Manager Modal -->
     <div id="hostTypeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: #252526; border-radius: 8px; width: 400px; max-height: 80%; display: flex; flex-direction: column; border: 1px solid #667eea;">
@@ -587,6 +629,31 @@
             </div>
         </div>
     </div>
+
+    <!-- Notification Modal -->
+    <div id="notificationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: #252526; border-radius: 8px; min-width: 400px; max-width: 500px; border: 1px solid #667eea; animation: slideIn 0.3s ease-out;">
+            <div id="notificationHeader" style="padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="notificationTitle" style="color: #fff; margin: 0; font-size: 1.1em;"></h3>
+                <button onclick="closeNotification()" style="background: none; border: none; color: #999; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+            </div>
+            <div id="notificationBody" style="padding: 20px; color: #ccc; line-height: 1.6;"></div>
+            <div id="notificationActions" style="padding: 15px 20px; border-top: 1px solid #333; display: flex; justify-content: flex-end; gap: 10px;"></div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
 
     <script src="/static/app.js?v=1767235770"></script>
 </body>

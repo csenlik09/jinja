@@ -7,6 +7,57 @@ let isEditMode = false;
 let allTemplates = [];
 let generatedConfigs = [];
 
+// Notification system
+function showNotification(title, message, type = 'info', buttons = null) {
+    const modal = document.getElementById('notificationModal');
+    const titleEl = document.getElementById('notificationTitle');
+    const bodyEl = document.getElementById('notificationBody');
+    const actionsEl = document.getElementById('notificationActions');
+    const headerEl = document.getElementById('notificationHeader');
+
+    // Set title
+    titleEl.textContent = title;
+
+    // Set message
+    bodyEl.innerHTML = message;
+
+    // Set header color based on type
+    if (type === 'success') {
+        headerEl.style.borderBottom = '1px solid #4CAF50';
+        titleEl.style.color = '#4CAF50';
+    } else if (type === 'error') {
+        headerEl.style.borderBottom = '1px solid #f44336';
+        titleEl.style.color = '#f44336';
+    } else if (type === 'warning') {
+        headerEl.style.borderBottom = '1px solid #FF9800';
+        titleEl.style.color = '#FF9800';
+    } else {
+        headerEl.style.borderBottom = '1px solid #667eea';
+        titleEl.style.color = '#667eea';
+    }
+
+    // Set buttons
+    if (buttons) {
+        actionsEl.innerHTML = buttons;
+    } else {
+        actionsEl.innerHTML = '<button class="button" onclick="closeNotification()">OK</button>';
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeNotification() {
+    document.getElementById('notificationModal').style.display = 'none';
+}
+
+function confirm(message, onConfirm) {
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
+        <button class="button" style="background: #f44336;" onclick="closeNotification(); (${onConfirm})()">Confirm</button>
+    `;
+    showNotification('Confirm', message, 'warning', buttons);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initializeJinjaTester();
@@ -36,6 +87,11 @@ function switchTab(tabName) {
             variablesEditor.refresh();
             templateEditor.refresh();
         }, 100);
+    }
+
+    // Load logs if switching to logs tab
+    if (tabName === 'logs') {
+        refreshLogs();
     }
 }
 
@@ -823,7 +879,7 @@ async function saveTemplate() {
     const versionName = document.getElementById('versionName')?.value || '';
 
     if (!name || !hostType || !portType || !switchOS || !content) {
-        alert('Please fill in all required fields');
+        showNotification('Missing Fields', 'Please fill in all required fields', 'error');
         return;
     }
 
@@ -846,7 +902,7 @@ async function saveTemplate() {
             const result = await response.json();
 
             if (result.success) {
-                alert('Template created successfully!');
+                showNotification('Success', 'Template created successfully!', 'success');
                 await loadTemplates();
                 currentTemplateId = result.template_id;
                 currentTemplateVersion = 1;
@@ -854,7 +910,7 @@ async function saveTemplate() {
                 const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
                 await showTemplateForm(template);
             } else {
-                alert('Error creating template: ' + result.error);
+                showNotification('Error', 'Error creating template: ' + result.error, 'error');
             }
         } else if (isEditMode) {
             // Update existing version
@@ -883,25 +939,31 @@ async function saveTemplate() {
                     })
                 });
 
-                alert('Template saved successfully!');
+                showNotification('Success', 'Template saved successfully!', 'success');
                 isEditMode = false;
                 await loadTemplates();
                 const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
                 await showTemplateForm(template);
             } else {
-                alert('Error saving template: ' + result.error);
+                showNotification('Error', 'Error saving template: ' + result.error, 'error');
             }
         }
     } catch (error) {
-        alert('Error saving template: ' + error.message);
+        showNotification('Error', 'Error saving template: ' + error.message, 'error');
     }
 }
 
 async function deleteTemplate() {
     if (!currentTemplateId) return;
 
-    if (!confirm('Are you sure you want to delete this template?')) return;
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
+        <button class="button" style="background: #f44336;" onclick="closeNotification(); confirmDeleteTemplate()">Delete</button>
+    `;
+    showNotification('Confirm Delete', 'Are you sure you want to delete this template and all its versions?', 'warning', buttons);
+}
 
+async function confirmDeleteTemplate() {
     try {
         const response = await fetch(`/api/templates/${currentTemplateId}`, {
             method: 'DELETE'
@@ -910,15 +972,15 @@ async function deleteTemplate() {
         const result = await response.json();
 
         if (result.success) {
-            alert('Template deleted successfully!');
+            showNotification('Success', 'Template deleted successfully!', 'success');
             currentTemplateId = null;
             await loadTemplates();
             cancelEdit();
         } else {
-            alert('Error deleting template: ' + result.error);
+            showNotification('Error', 'Error deleting template: ' + result.error, 'error');
         }
     } catch (error) {
-        alert('Error deleting template: ' + error.message);
+        showNotification('Error', 'Error deleting template: ' + error.message, 'error');
     }
 }
 
@@ -942,49 +1004,83 @@ async function loadVersion() {
     const selectedValue = versionSelect.value;
 
     if (selectedValue === 'new') {
-        // Create new version
-        const versionName = prompt('Enter new version name:');
-        if (!versionName) {
-            versionSelect.value = currentTemplateVersion;
-            return;
-        }
-
-        const versionDescription = prompt('Enter version description (optional):') || '';
-        const content = document.getElementById('templateContent').value;
-
-        try {
-            const response = await fetch(`/api/templates/${currentTemplateId}/versions`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    version_name: versionName,
-                    version_description: versionDescription,
-                    template_content: content
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert('New version created successfully!');
-                currentTemplateVersion = result.version;
-                isEditMode = false;
-                const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-                await showTemplateForm(template);
-            } else {
-                alert('Error creating version: ' + result.error);
-                versionSelect.value = currentTemplateVersion;
-            }
-        } catch (error) {
-            alert('Error creating version: ' + error.message);
-            versionSelect.value = currentTemplateVersion;
-        }
+        // Show input modal for new version
+        showVersionInputModal();
     } else {
         // Load selected version
         currentTemplateVersion = parseInt(selectedValue);
         isEditMode = false;
         const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
         await showTemplateForm(template);
+    }
+}
+
+function showVersionInputModal() {
+    const inputForm = `
+        <div style="margin-bottom: 15px;">
+            <label class="form-label">Version Name *</label>
+            <input type="text" id="newVersionName" class="form-input" placeholder="e.g., v2.0" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label class="form-label">Version Description (optional)</label>
+            <textarea id="newVersionDescription" class="form-textarea" rows="3" placeholder="Describe what changed in this version..." style="width: 100%;"></textarea>
+        </div>
+    `;
+
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification(); document.getElementById('versionSelect').value = ${currentTemplateVersion}">Cancel</button>
+        <button class="button" style="background: #4CAF50;" onclick="createNewVersionFromModal()">Create Version</button>
+    `;
+
+    showNotification('Create New Version', inputForm, 'info', buttons);
+
+    // Focus on input after modal opens
+    setTimeout(() => {
+        const input = document.getElementById('newVersionName');
+        if (input) input.focus();
+    }, 100);
+}
+
+async function createNewVersionFromModal() {
+    const versionName = document.getElementById('newVersionName').value.trim();
+    const versionDescription = document.getElementById('newVersionDescription').value.trim();
+    const versionSelect = document.getElementById('versionSelect');
+
+    if (!versionName) {
+        showNotification('Missing Field', 'Please enter a version name', 'error');
+        return;
+    }
+
+    closeNotification();
+
+    const content = document.getElementById('templateContent').value;
+
+    try {
+        const response = await fetch(`/api/templates/${currentTemplateId}/versions`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                version_name: versionName,
+                version_description: versionDescription,
+                template_content: content
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Success', 'New version created successfully!', 'success');
+            currentTemplateVersion = result.version;
+            isEditMode = false;
+            const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
+            await showTemplateForm(template);
+        } else {
+            showNotification('Error', 'Error creating version: ' + result.error, 'error');
+            versionSelect.value = currentTemplateVersion;
+        }
+    } catch (error) {
+        showNotification('Error', 'Error creating version: ' + error.message, 'error');
+        versionSelect.value = currentTemplateVersion;
     }
 }
 
@@ -997,8 +1093,14 @@ async function enableEditMode() {
 async function setActiveVersion() {
     if (!currentTemplateId || !currentTemplateVersion) return;
 
-    if (!confirm(`Set version ${currentTemplateVersion} as the active version?`)) return;
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
+        <button class="button" style="background: #4CAF50;" onclick="closeNotification(); confirmSetActiveVersion()">Set Active</button>
+    `;
+    showNotification('Confirm', `Set version ${currentTemplateVersion} as the active version?`, 'info', buttons);
+}
 
+async function confirmSetActiveVersion() {
     try {
         const response = await fetch(`/api/templates/${currentTemplateId}/active-version/${currentTemplateVersion}`, {
             method: 'POST'
@@ -1007,23 +1109,29 @@ async function setActiveVersion() {
         const result = await response.json();
 
         if (result.success) {
-            alert('Active version updated successfully!');
+            showNotification('Success', 'Active version updated successfully!', 'success');
             await loadTemplates();
             const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
             await showTemplateForm(template);
         } else {
-            alert('Error setting active version: ' + result.error);
+            showNotification('Error', 'Error setting active version: ' + result.error, 'error');
         }
     } catch (error) {
-        alert('Error setting active version: ' + error.message);
+        showNotification('Error', 'Error setting active version: ' + error.message, 'error');
     }
 }
 
 async function deleteVersion() {
     if (!currentTemplateId || !currentTemplateVersion) return;
 
-    if (!confirm(`Are you sure you want to delete version ${currentTemplateVersion}?`)) return;
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
+        <button class="button" style="background: #f44336;" onclick="closeNotification(); confirmDeleteVersion()">Delete</button>
+    `;
+    showNotification('Confirm Delete', `Are you sure you want to delete version ${currentTemplateVersion}?`, 'warning', buttons);
+}
 
+async function confirmDeleteVersion() {
     try {
         const response = await fetch(`/api/templates/${currentTemplateId}/versions/${currentTemplateVersion}`, {
             method: 'DELETE'
@@ -1032,17 +1140,17 @@ async function deleteVersion() {
         const result = await response.json();
 
         if (result.success) {
-            alert('Version deleted successfully!');
+            showNotification('Success', 'Version deleted successfully!', 'success');
             await loadTemplates();
             const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
             currentTemplateVersion = template.active_version || 1;
             isEditMode = false;
             await showTemplateForm(template);
         } else {
-            alert('Error deleting version: ' + result.error);
+            showNotification('Error', 'Error deleting version: ' + result.error, 'error');
         }
     } catch (error) {
-        alert('Error deleting version: ' + error.message);
+        showNotification('Error', 'Error deleting version: ' + error.message, 'error');
     }
 }
 
@@ -1073,10 +1181,35 @@ async function importDatabase(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!confirm('Warning: This will replace your current database. All existing templates and settings will be lost. Continue?')) {
-        event.target.value = '';
-        return;
+    // Store file in temporary variable for later use
+    window.pendingDatabaseFile = file;
+    window.pendingDatabaseInput = event.target;
+
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification(); cancelDatabaseRestore()">Cancel</button>
+        <button class="button" style="background: #f44336;" onclick="closeNotification(); confirmDatabaseRestore()">Restore</button>
+    `;
+    showNotification(
+        'Confirm Restore',
+        '<strong>Warning:</strong> This will replace your current database.<br><br>All existing templates and settings will be lost.<br><br>Continue?',
+        'warning',
+        buttons
+    );
+}
+
+function cancelDatabaseRestore() {
+    if (window.pendingDatabaseInput) {
+        window.pendingDatabaseInput.value = '';
     }
+    window.pendingDatabaseFile = null;
+    window.pendingDatabaseInput = null;
+}
+
+async function confirmDatabaseRestore() {
+    const file = window.pendingDatabaseFile;
+    const inputElement = window.pendingDatabaseInput;
+
+    if (!file) return;
 
     try {
         const formData = new FormData();
@@ -1090,16 +1223,22 @@ async function importDatabase(event) {
         const result = await response.json();
 
         if (result.success) {
-            alert('Database restored successfully! Reloading page...');
-            window.location.reload();
+            showNotification('Success', 'Database restored successfully! Reloading page...', 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            alert('Error restoring database: ' + result.error);
+            showNotification('Error', 'Error restoring database: ' + result.error, 'error');
         }
     } catch (error) {
         console.error('Error importing database:', error);
-        alert('Error importing database: ' + error.message);
+        showNotification('Error', 'Error importing database: ' + error.message, 'error');
     } finally {
-        event.target.value = '';
+        if (inputElement) {
+            inputElement.value = '';
+        }
+        window.pendingDatabaseFile = null;
+        window.pendingDatabaseInput = null;
     }
 }
 
@@ -1422,4 +1561,183 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+// ========== Logs Tab ==========
+let allLogs = [];
+
+async function refreshLogs() {
+    try {
+        const response = await fetch('/api/logs');
+        const result = await response.json();
+
+        if (result.success) {
+            allLogs = result.logs;
+            filterLogs();
+        } else {
+            document.getElementById('logsContainer').innerHTML = '<div style="color: #f44336;">Error loading logs</div>';
+        }
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+        document.getElementById('logsContainer').innerHTML = `<div style="color: #f44336;">Error: ${error.message}</div>`;
+    }
+}
+
+function filterLogs() {
+    if (!allLogs || allLogs.length === 0) {
+        refreshLogs();
+        return;
+    }
+
+    const searchText = document.getElementById('logSearch').value.toLowerCase();
+    const levelFilter = document.getElementById('logLevel').value;
+    const startTime = document.getElementById('logStartTime').value;
+    const endTime = document.getElementById('logEndTime').value;
+
+    let filtered = allLogs;
+
+    // Filter by log level
+    if (levelFilter !== 'all') {
+        filtered = filtered.filter(log => log.level === levelFilter);
+    }
+
+    // Filter by time range (custom date/time pickers)
+    if (startTime || endTime) {
+        filtered = filtered.filter(log => {
+            // Parse log timestamp: "2026-01-01 20:58:21" (UTC)
+            const logTime = new Date(log.timestamp.replace(' ', 'T') + 'Z');
+
+            if (startTime) {
+                const start = new Date(startTime);
+                if (logTime < start) return false;
+            }
+
+            if (endTime) {
+                const end = new Date(endTime);
+                if (logTime > end) return false;
+            }
+
+            return true;
+        });
+    }
+
+    // Filter by search text
+    if (searchText) {
+        filtered = filtered.filter(log =>
+            log.message.toLowerCase().includes(searchText) ||
+            log.module.toLowerCase().includes(searchText) ||
+            log.level.toLowerCase().includes(searchText)
+        );
+    }
+
+    displayLogs(filtered);
+}
+
+function updateDateDisplay(inputId, displayId) {
+    const input = document.getElementById(inputId);
+    const display = document.getElementById(displayId);
+
+    if (input.value) {
+        // Convert to readable format: "2026-01-01T20:58" -> "01/01/2026 08:58 PM"
+        const date = new Date(input.value);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        let hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        display.textContent = `${month}/${day}/${year} ${hours}:${minutes} ${ampm}`;
+        display.style.color = '#ccc';
+    } else {
+        display.textContent = 'Select date/time...';
+        display.style.color = '#666';
+    }
+}
+
+function clearTimeFilters() {
+    document.getElementById('logStartTime').value = '';
+    document.getElementById('logEndTime').value = '';
+    document.getElementById('logStartDisplay').textContent = 'Select date/time...';
+    document.getElementById('logStartDisplay').style.color = '#666';
+    document.getElementById('logEndDisplay').textContent = 'Select date/time...';
+    document.getElementById('logEndDisplay').style.color = '#666';
+    filterLogs();
+}
+
+function displayLogs(logs) {
+    const container = document.getElementById('logsContainer');
+
+    if (logs.length === 0) {
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No logs available</div>';
+        return;
+    }
+
+    let html = '';
+    // Create a reversed copy instead of modifying the original
+    [...logs].reverse().forEach(log => {
+        let levelColor = '#999';
+
+        switch(log.level) {
+            case 'ERROR':
+                levelColor = '#f44336';
+                break;
+            case 'WARNING':
+                levelColor = '#FF9800';
+                break;
+            case 'INFO':
+                levelColor = '#4CAF50';
+                break;
+            case 'DEBUG':
+                levelColor = '#2196F3';
+                break;
+        }
+
+        // Format timestamp in US format with UTC indicator
+        // Input: "2026-01-01 20:58:21" -> Output: "01/01/2026 08:58:21 PM UTC"
+        const formatTimestamp = (timestamp) => {
+            const date = new Date(timestamp.replace(' ', 'T') + 'Z');
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const year = date.getUTCFullYear();
+            let hours = date.getUTCHours();
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            return `${month}/${day}/${year} ${hours}:${minutes}:${seconds} ${ampm} UTC`;
+        };
+
+        // Single line format: [timestamp] LEVEL: message (module:line)
+        html += `<div style="color: #ccc; font-family: 'Consolas', monospace; font-size: 12px; padding: 2px 0; white-space: nowrap;">[${formatTimestamp(log.timestamp)}] <span style="color: ${levelColor}; font-weight: bold;">${log.level.padEnd(7)}</span>: ${escapeHtml(log.message)} <span style="color: #666;">(${log.module}:${log.line})</span></div>`;
+    });
+
+    container.innerHTML = html;
+    container.scrollTop = 0;
+}
+
+async function clearLogs() {
+    const buttons = `
+        <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
+        <button class="button" style="background: #f44336;" onclick="closeNotification(); confirmClearLogs()">Clear</button>
+    `;
+    showNotification('Confirm Clear', 'Are you sure you want to clear all logs?', 'warning', buttons);
+}
+
+async function confirmClearLogs() {
+    try {
+        const response = await fetch('/api/logs/clear', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('Success', 'Logs cleared successfully', 'success');
+            refreshLogs();
+        } else {
+            showNotification('Error', 'Error clearing logs: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Error', 'Error clearing logs: ' + error.message, 'error');
+    }
+}
 
