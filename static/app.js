@@ -297,7 +297,7 @@ function sortDataByPortOrder(data) {
     return sortedData;
 }
 
-function displayEditablePreview(data, columns) {
+async function displayEditablePreview(data, columns) {
     const previewContainer = document.getElementById('dataPreview');
     if (!previewContainer) return;
 
@@ -305,6 +305,11 @@ function displayEditablePreview(data, columns) {
         previewContainer.innerHTML = '<div class="info-box">No data to preview</div>';
         return;
     }
+
+    // Get all template names to validate against
+    const templatesResponse = await fetch('/api/templates');
+    const templates = await templatesResponse.json();
+    const validTemplateNames = templates.map(t => t.name.toLowerCase());
 
     let tableHTML = '<div style="padding: 20px; padding-top: 0;"><table class="preview-table" style="width: 100%; border-collapse: collapse; background: #1e1e1e;">';
 
@@ -318,9 +323,23 @@ function displayEditablePreview(data, columns) {
 
     // Data rows
     data.forEach((row, rowIndex) => {
-        tableHTML += '<tr>';
+        // Check for errors in this row
+        const template = row.template ? String(row.template).trim() : '';
+        const switchName = row.switch_name ? String(row.switch_name).trim() : '';
+        const switchPort = row.switch_port ? String(row.switch_port).trim() : '';
+
+        const templateMissing = !template;
+        const templateInvalid = template && !validTemplateNames.includes(template.toLowerCase());
+        const switchNameMissing = !switchName;
+        const switchPortMissing = !switchPort;
+
+        const hasError = templateMissing || templateInvalid || switchNameMissing || switchPortMissing;
+        const rowBgColor = hasError ? 'rgba(255, 0, 0, 0.15)' : 'transparent';
+
+        tableHTML += `<tr style="background: ${rowBgColor};">`;
         // Line number column
         tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center; color: #999; background: #1a1a1a; font-family: 'Consolas', monospace; font-size: 0.85em;">${rowIndex + 1}</td>`;
+
         columns.forEach(col => {
             let value = row[col] !== undefined && row[col] !== null ? row[col] : '';
 
@@ -334,7 +353,17 @@ function displayEditablePreview(data, columns) {
                 value = cleanedValue;
             }
 
-            tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center;">
+            // Determine cell background color
+            let cellBgColor = 'transparent';
+            if (col === 'template' && (templateMissing || templateInvalid)) {
+                cellBgColor = 'rgba(255, 0, 0, 0.3)';
+            } else if (col === 'switch_name' && switchNameMissing) {
+                cellBgColor = 'rgba(255, 0, 0, 0.3)';
+            } else if (col === 'switch_port' && switchPortMissing) {
+                cellBgColor = 'rgba(255, 0, 0, 0.3)';
+            }
+
+            tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center; background: ${cellBgColor};">
                 <input type="text"
                        class="cell-input"
                        data-row="${rowIndex}"
@@ -374,7 +403,7 @@ async function generateConfigs() {
 
         if (result.success) {
             generatedConfigs = result.configs;
-            displayConfigs(result.configs);
+            displayConfigs(result.configs, result.success_row_count, result.error_row_count, result.skipped_row_count);
         } else {
             alert('Error generating configs: ' + result.error);
         }
@@ -383,7 +412,7 @@ async function generateConfigs() {
     }
 }
 
-function displayConfigs(configs) {
+function displayConfigs(configs, successRowCount = 0, errorRowCount = 0, skippedRowCount = 0) {
     const resultsContainer = document.getElementById('configResults');
 
     if (configs.length === 0) {
@@ -476,27 +505,20 @@ function displayConfigs(configs) {
     const lines = cleanedConfig.split('\n');
     const highlightedLines = lines.map(line => highlightNetworkConfig(line));
 
+    // Calculate total skipped (errors + skipped validation)
+    const totalSkipped = errorRowCount + skippedRowCount;
+
     // Display in a single textbox-style output
     resultsContainer.innerHTML = `
-        <div style="margin-bottom: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+        <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: #4CAF50; font-size: 0.95em;">
+                ✓ Prepared configs for ${successRowCount} line${successRowCount !== 1 ? 's' : ''}${totalSkipped > 0 ? `, skipped ${totalSkipped} line${totalSkipped !== 1 ? 's' : ''}` : ''}
+            </div>
             <button class="button button-secondary" onclick="copyConfigToClipboard()">Copy</button>
         </div>
-        <div class="config-output" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+        <div class="config-output">
             ${highlightedLines.join('\n')}
         </div>
-        ${errorConfigs.length > 0 ? `
-            <div class="info-box" style="background: #3d1f1f; border-color: #f44336; margin-top: 15px;">
-                <div style="color: #f44336; font-weight: bold; margin-bottom: 10px;">⚠️ Some rows had errors:</div>
-                ${errorConfigs.map(config => `
-                    <div style="margin-bottom: 10px; padding: 8px; background: #2d1515; border-radius: 4px;">
-                        <div style="color: #ff8080; font-size: 0.9em; margin-bottom: 4px;">
-                            ${config.row.host_type || 'N/A'}/${config.row.port_type || 'N/A'}/${config.row.switch_os || 'N/A'}
-                        </div>
-                        <div style="color: #ffcccc; font-size: 0.85em;">${config.error}</div>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
     `;
 
     // Store the cleaned config for copying
@@ -756,6 +778,7 @@ async function showTemplateForm(template = null) {
     if (readonly) {
         actionsContainer.innerHTML = `
             <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
+            <button class="button" style="background: #c62828;" onclick="deleteTemplate()">Delete Template</button>
             <button class="button" style="background: #f44336;" onclick="deleteVersion()">Delete Version</button>
             <button class="button" onclick="enableEditMode()" style="background: #FF9800;">Edit</button>
             <button class="button" onclick="setActiveVersion()" style="background: #4CAF50;">Active</button>
@@ -763,8 +786,8 @@ async function showTemplateForm(template = null) {
     } else {
         actionsContainer.innerHTML = `
             <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
-            <button class="button" style="background: #f44336;" onclick="deleteTemplate()">Delete</button>
-            <button class="button" onclick="saveTemplate()">Save Template</button>
+            <button class="button" style="background: #c62828;" onclick="deleteTemplate()">Delete Template</button>
+            <button class="button" onclick="saveTemplate()">Save</button>
         `;
     }
     actionsContainer.style.display = 'flex';

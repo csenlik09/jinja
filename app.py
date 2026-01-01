@@ -245,6 +245,7 @@ def generate_configs():
         # Group rows by template name
         from collections import defaultdict
         grouped_data = defaultdict(list)
+        skipped_count = 0
 
         for row in excel_data:
             # Debug: Print first row to see actual column names
@@ -259,6 +260,7 @@ def generate_configs():
             # Skip rows missing required fields
             if not template_name or not switch_name or switch_port is None or str(switch_port).strip() == '':
                 print(f"DEBUG: Skipping row - template={template_name}, switch_name={switch_name}, switch_port={switch_port}")
+                skipped_count += 1
                 continue
 
             # Normalize template name for grouping
@@ -272,6 +274,8 @@ def generate_configs():
             print(f"DEBUG: Template '{key}': {len(rows)} rows")
 
         configs = []
+        success_row_count = 0
+        error_row_count = 0
 
         # Process each template group
         for template_name, rows in grouped_data.items():
@@ -280,6 +284,7 @@ def generate_configs():
 
             if not template_obj:
                 # No template found - mark all rows in this group as errors
+                error_row_count += len(rows)
                 for row in rows:
                     configs.append({
                         'row': row,
@@ -307,14 +312,17 @@ def generate_configs():
                 output = template.render(**render_context)
 
                 # Return one config for the entire group
+                success_row_count += len(rows)
                 configs.append({
                     'row': {'template': template_name, 'row_count': len(rows)},
                     'success': True,
                     'config': output,
-                    'template_name': template_obj['name']
+                    'template_name': template_obj['name'],
+                    'row_count': len(rows)
                 })
             except Exception as e:
                 # Template rendering failed - mark all rows in this group as errors
+                error_row_count += len(rows)
                 for row in rows:
                     configs.append({
                         'row': row,
@@ -322,7 +330,13 @@ def generate_configs():
                         'error': f'Template rendering error: {str(e)}'
                     })
 
-        return jsonify({'success': True, 'configs': configs})
+        return jsonify({
+            'success': True,
+            'configs': configs,
+            'success_row_count': success_row_count,
+            'error_row_count': error_row_count,
+            'skipped_row_count': skipped_count
+        })
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
