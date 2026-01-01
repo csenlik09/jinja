@@ -18,7 +18,11 @@
       "Bash(podman cp:*)",
       "Bash(podman restart:*)",
       "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" add -A)",
-      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" status)"
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" status)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" commit -m \"$(cat <<''EOF''\nWorking good - Excel file needs template name, Template manager needs improvement\n\nChanges:\n- Added resizable split view for Config Generator (50/50 default, adjustable)\n- Fixed preview feature with editable table display\n- Excel now requires ''template'' column instead of host_type/port_type/switch_os\n- Required columns: template, switch_name, switch_port\n- Simplified Template Manager UI with aligned management buttons\n- Removed dropdown filters, added direct Manage buttons for Host Types, Vendors, and OS\n- Backend handles empty Excel cells with df.fillna('''')\n- Template matching now case-insensitive\n- Passes data as both ''ports'' and ''switches'' to templates for compatibility\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" push)",
+      "Bash(git add:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []

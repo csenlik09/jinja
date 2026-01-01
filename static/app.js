@@ -76,6 +76,10 @@ function initializeJinjaTester() {
         const trimmed = line.trim();
 
         if (!trimmed) return escapeHtml(line);
+        // Highlight switch separator lines (##### SWITCH_NAME #####)
+        if (trimmed.match(/^#{3,}.*#{3,}$/)) {
+            return `<div style="color: #00ff00; font-weight: bold; font-size: 1.1em; background: rgba(0, 255, 0, 0.1); padding: 8px; margin: 10px 0; border-left: 4px solid #00ff00; border-radius: 3px;">${escapeHtml(line)}</div>`;
+        }
         if (trimmed === '!' || trimmed.startsWith('#')) {
             return `<span style="color: #808080;">${escapeHtml(line)}</span>`;
         }
@@ -237,7 +241,7 @@ async function handleFileUpload(event) {
                 </div>
                 <div style="margin-top: 15px;">
                     <button class="button button-secondary" onclick="resetUploadArea()" style="font-size: 0.9em;">
-                        📤 Upload Another File
+                        🔄 RESET
                     </button>
                 </div>
             `;
@@ -300,13 +304,13 @@ function displayEditablePreview(data, columns) {
         return;
     }
 
-    let tableHTML = '<table class="preview-table" style="width: 100%; border-collapse: collapse; background: #1e1e1e;">';
+    let tableHTML = '<div style="padding: 20px; padding-top: 0;"><table class="preview-table" style="width: 100%; border-collapse: collapse; background: #1e1e1e;">';
 
     // Header
-    tableHTML += '<thead style="position: sticky; top: 0; background: #2d2d30; z-index: 10;"><tr>';
-    tableHTML += `<th style="padding: 10px; border: 1px solid #444; color: #999; font-weight: bold; text-align: center; width: 50px; background: #252526;">#</th>`;
+    tableHTML += '<thead><tr style="position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">';
+    tableHTML += `<th style="padding: 10px; border: 1px solid #444; border-bottom: 2px solid #667eea; color: #999; font-weight: bold; text-align: center; width: 50px; background: #252526;">#</th>`;
     columns.forEach(col => {
-        tableHTML += `<th style="padding: 10px; border: 1px solid #444; color: #fff; font-weight: bold; text-align: left;">${escapeHtml(col)}</th>`;
+        tableHTML += `<th style="padding: 10px; border: 1px solid #444; border-bottom: 2px solid #667eea; color: #fff; font-weight: bold; text-align: center; background: #2d2d30;">${escapeHtml(col)}</th>`;
     });
     tableHTML += '</tr></thead><tbody>';
 
@@ -317,20 +321,20 @@ function displayEditablePreview(data, columns) {
         tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center; color: #999; background: #1a1a1a; font-family: 'Consolas', monospace; font-size: 0.85em;">${rowIndex + 1}</td>`;
         columns.forEach(col => {
             const value = row[col] !== undefined && row[col] !== null ? row[col] : '';
-            tableHTML += `<td style="padding: 8px; border: 1px solid #444;">
+            tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center;">
                 <input type="text"
                        class="cell-input"
                        data-row="${rowIndex}"
                        data-col="${escapeHtml(col)}"
                        value="${escapeHtml(String(value))}"
-                       style="width: 100%; background: transparent; border: none; color: #ccc; padding: 4px; font-family: 'Consolas', monospace; font-size: 0.9em;"
+                       style="width: 100%; background: transparent; border: none; color: #ccc; padding: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; text-align: center;"
                        onchange="handleCellEdit(${rowIndex}, '${escapeHtml(col)}', this.value)">
             </td>`;
         });
         tableHTML += '</tr>';
     });
 
-    tableHTML += '</tbody></table>';
+    tableHTML += '</tbody></table></div>';
     previewContainer.innerHTML = tableHTML;
 }
 
@@ -379,6 +383,10 @@ function displayConfigs(configs) {
         const trimmed = line.trim();
 
         if (!trimmed) return escapeHtml(line);
+        // Highlight switch separator lines (##### SWITCH_NAME #####)
+        if (trimmed.match(/^#{3,}.*#{3,}$/)) {
+            return `<div style="color: #00ff00; font-weight: bold; font-size: 1.1em; background: rgba(0, 255, 0, 0.1); padding: 8px; margin: 10px 0; border-left: 4px solid #00ff00; border-radius: 3px;">${escapeHtml(line)}</div>`;
+        }
         if (trimmed === '!' || trimmed.startsWith('#')) {
             return `<span style="color: #808080;">${escapeHtml(line)}</span>`;
         }
@@ -446,10 +454,13 @@ function displayConfigs(configs) {
     }
 
     // Combine all configs into one output (just the config content, no separators)
-    const combinedConfig = successConfigs.map(config => config.config).join('\n\n');
+    const combinedConfig = successConfigs.map(config => config.config).join('\n');
+
+    // Clean up excessive blank lines for clipboard copy - replace 2 or more blank lines with single blank line
+    const cleanedConfig = combinedConfig.replace(/\n\s*\n\s*\n+/g, '\n\n').trim();
 
     // Apply syntax highlighting - keep single blank lines but remove excessive ones
-    const lines = combinedConfig.trim().split('\n');
+    const lines = cleanedConfig.split('\n');
     const highlightedLines = lines.map(line => highlightNetworkConfig(line));
 
     // Display in a single textbox-style output
@@ -475,8 +486,8 @@ function displayConfigs(configs) {
         ` : ''}
     `;
 
-    // Store the combined config for copying
-    window.currentCombinedConfig = combinedConfig;
+    // Store the cleaned config for copying
+    window.currentCombinedConfig = cleanedConfig;
 }
 
 function escapeHtml(text) {
