@@ -205,16 +205,7 @@ class Database:
         conn.close()
         return dict(template) if template else None
 
-    def get_template_by_name(self, name):
-        """Get template by name (case-insensitive)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM templates WHERE LOWER(name) = LOWER(?)', (name,))
-        template = cursor.fetchone()
-        conn.close()
-        return dict(template) if template else None
-
-    def get_templates_by_criteria(self, host_type=None, port_type=None, switch_os=None):
+    def get_templates_by_criteria(self, host_type=None, vendor=None, os=None):
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -224,12 +215,12 @@ class Database:
         if host_type:
             query += ' AND host_type = ?'
             params.append(host_type)
-        if port_type:
-            query += ' AND port_type = ?'
-            params.append(port_type)
-        if switch_os:
-            query += ' AND switch_os = ?'
-            params.append(switch_os)
+        if vendor:
+            query += ' AND vendor = ?'
+            params.append(vendor)
+        if os:
+            query += ' AND os = ?'
+            params.append(os)
 
         cursor.execute(query, params)
         templates = cursor.fetchall()
@@ -239,7 +230,7 @@ class Database:
     def get_all_templates(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM templates ORDER BY host_type, port_type, switch_os, name')
+        cursor.execute('SELECT * FROM templates ORDER BY host_type, vendor, os, name')
         templates = cursor.fetchall()
         conn.close()
         return [dict(t) for t in templates]
@@ -249,7 +240,7 @@ class Database:
         cursor = conn.cursor()
 
         try:
-            allowed_fields = ['name', 'host_type', 'port_type', 'switch_os', 'template_content', 'description']
+            allowed_fields = ['name', 'host_type', 'vendor', 'os', 'template_content', 'description']
             updates = []
             values = []
 
@@ -268,9 +259,9 @@ class Database:
         except sqlite3.IntegrityError as e:
             conn.rollback()
             host_type = kwargs.get('host_type', 'unknown')
-            port_type = kwargs.get('port_type', 'unknown')
-            switch_os = kwargs.get('switch_os', 'unknown')
-            raise ValueError(f'A template already exists for {host_type}/{port_type}/{switch_os}. Only one template is allowed per combination.')
+            vendor = kwargs.get('vendor', 'unknown')
+            os = kwargs.get('os', 'unknown')
+            raise ValueError(f'A template already exists for {host_type}/{vendor}/{os}. Only one template is allowed per combination.')
         finally:
             conn.close()
 
@@ -290,18 +281,18 @@ class Database:
         conn.close()
         return [r['name'] for r in results]
 
-    def get_port_types(self):
+    def get_vendors(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT name FROM port_types ORDER BY name')
+        cursor.execute('SELECT name FROM vendors ORDER BY name')
         results = cursor.fetchall()
         conn.close()
         return [r['name'] for r in results]
 
-    def get_switch_os_types(self):
+    def get_os_types(self, vendor=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT name FROM switch_os_types ORDER BY name')
+        cursor.execute('SELECT name FROM os_types ORDER BY name')
         results = cursor.fetchall()
         conn.close()
         return [r['name'] for r in results]
@@ -329,30 +320,30 @@ class Database:
         conn.commit()
         conn.close()
 
-    def add_port_type(self, name):
+    def add_vendor(self, name):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO port_types (name) VALUES (?)', (name,))
+        cursor.execute('INSERT INTO vendors (name) VALUES (?)', (name,))
         conn.commit()
         conn.close()
 
-    def remove_port_type(self, name):
+    def remove_vendor(self, name):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM port_types WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM vendors WHERE name = ?', (name,))
         conn.commit()
         conn.close()
 
-    def add_switch_os_type(self, name):
+    def add_os_type(self, name):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO switch_os_types (name) VALUES (?)', (name,))
+        cursor.execute('INSERT INTO os_types (name) VALUES (?)', (name,))
         conn.commit()
         conn.close()
 
-    def remove_switch_os_type(self, name):
+    def remove_os_type(self, name):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM switch_os_types WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM os_types WHERE name = ?', (name,))
         conn.commit()
         conn.close()

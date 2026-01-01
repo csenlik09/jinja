@@ -458,34 +458,23 @@
 
     <!-- Config Generator Tab -->
     <div id="config-generator" class="tab-content active">
-        <div style="display: flex; flex: 1; overflow: hidden;">
-            <!-- Left Panel: Upload and Preview -->
-            <div id="leftPanel" style="width: 50%; display: flex; flex-direction: column; background: #252526;">
-                <div class="upload-section">
-                    <div class="info-box">
-                        📋 Upload an Excel file with device configurations. Required columns: <strong>template</strong> (template name), <strong>switch_name</strong>, <strong>switch_port</strong>. Additional columns should match your template variables.
-                    </div>
-                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
-                        <div class="upload-icon">📤</div>
-                        <div style="color: #ccc; font-size: 1.1em; margin-bottom: 8px;">Click or drag Excel file here</div>
-                        <div style="color: #999; font-size: 0.9em;">Supported formats: .xlsx, .xls</div>
-                        <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" onchange="handleFileUpload(event)">
-                    </div>
-                    <div style="margin-top: 15px; text-align: center;">
-                        <button class="button" onclick="generateConfigs()" id="generateBtn" disabled>Generate Configs</button>
-                        <button class="button button-secondary" onclick="downloadAllConfigs()" id="downloadAllBtn" disabled>Download All Configs</button>
-                    </div>
+        <div class="config-gen-container">
+            <div class="upload-section">
+                <div class="info-box">
+                    📋 Upload an Excel file with device configurations. Required columns: <strong>template</strong> (template name), <strong>switch_name</strong>, <strong>switch_port</strong>. Additional columns should match your template variables.
                 </div>
-                <div id="dataPreview" style="flex: 1; overflow: auto; padding: 20px; background: #1e1e1e;"></div>
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📤</div>
+                    <div style="color: #ccc; font-size: 1.1em; margin-bottom: 8px;">Click or drag Excel file here</div>
+                    <div style="color: #999; font-size: 0.9em;">Supported formats: .xlsx, .xls</div>
+                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" onchange="handleFileUpload(event)">
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="button" onclick="generateConfigs()" id="generateBtn" disabled>Generate Configs</button>
+                    <button class="button button-secondary" onclick="downloadAllConfigs()" id="downloadAllBtn" disabled>Download All Configs</button>
+                </div>
             </div>
-
-            <!-- Resizer -->
-            <div id="resizer" style="width: 5px; background: #333; cursor: col-resize; position: relative;">
-                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 3px; height: 40px; background: #667eea; border-radius: 2px;"></div>
-            </div>
-
-            <!-- Right Panel: Config Results -->
-            <div class="config-results" id="configResults" style="flex: 1; overflow: auto; padding: 20px;"></div>
+            <div class="config-results" id="configResults"></div>
         </div>
     </div>
 
@@ -497,23 +486,34 @@
                     <span>Templates</span>
                 </div>
                 <div class="filter-section">
-                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px;">
-                        <button class="button" onclick="showHostTypeManager()" style="flex: 1; padding: 10px; margin: 0;">Manage Host Types</button>
-                        <button class="button" onclick="showVendorManager()" style="flex: 1; padding: 10px; margin: 0;">Manage Vendors</button>
-                        <button class="button" onclick="showOSManager()" style="flex: 1; padding: 10px; margin: 0;">Manage OS</button>
+                    <div class="filter-row">
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Host Type</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterHostType" onchange="filterTemplates()" style="flex: 1;">
+                                <option value="">All Host Types</option>
+                            </select>
+                            <button class="button" onclick="showHostTypeManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Switch Vendor</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterVendor" onchange="updateOSDropdown(); filterTemplates();" style="flex: 1;">
+                                <option value="">All Switch Vendors</option>
+                            </select>
+                            <button class="button" onclick="showVendorManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label style="color: #999; font-size: 0.85em; margin-bottom: 5px; display: block;">Switch OS</label>
+                        <div style="display: flex; gap: 5px;">
+                            <select class="form-select" id="filterOS" onchange="filterTemplates()" style="flex: 1;">
+                                <option value="">All Switch OS</option>
+                            </select>
+                            <button class="button" onclick="showOSManager()" style="padding: 8px 10px; margin: 0; min-width: 40px;">✎</button>
+                        </div>
                     </div>
                     <button class="button" onclick="createNewTemplate()" style="width: 100%;">+ New Template</button>
-
-                    <!-- Hidden filter dropdowns (kept for backwards compatibility) -->
-                    <select class="form-select" id="filterHostType" onchange="filterTemplates()" style="display: none;">
-                        <option value="">All Host Types</option>
-                    </select>
-                    <select class="form-select" id="filterVendor" onchange="updateOSDropdown(); filterTemplates();" style="display: none;">
-                        <option value="">All Switch Vendors</option>
-                    </select>
-                    <select class="form-select" id="filterOS" onchange="filterTemplates()" style="display: none;">
-                        <option value="">All Switch OS</option>
-                    </select>
                 </div>
                 <div class="template-list" id="templateList"></div>
             </div>
@@ -591,6 +591,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20251231b"></script>
+    <script src="/static/app.js?v=20251231a"></script>
 </body>
 </html>

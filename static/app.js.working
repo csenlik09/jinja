@@ -1081,42 +1081,5 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-
-    // Config Generator resizer
-    const resizer = document.getElementById("resizer");
-    const leftPanelConfig = document.getElementById("leftPanel");
-    const configGenerator = document.getElementById("config-generator");
-
-    if (resizer && leftPanelConfig && configGenerator) {
-        let isResizingConfig = false;
-
-        resizer.addEventListener("mousedown", (e) => {
-            isResizingConfig = true;
-            document.body.style.cursor = "col-resize";
-            document.body.style.userSelect = "none";
-            e.preventDefault();
-        });
-
-        document.addEventListener("mousemove", (e) => {
-            if (!isResizingConfig) return;
-
-            const containerRect = configGenerator.getBoundingClientRect();
-            const newWidth = e.clientX - containerRect.left;
-            const percentage = (newWidth / containerRect.width) * 100;
-
-            // Keep between 20% and 80%
-            if (percentage >= 20 && percentage <= 80) {
-                leftPanelConfig.style.width = `${percentage}%`;
-            }
-        });
-
-        document.addEventListener("mouseup", () => {
-            if (isResizingConfig) {
-                isResizingConfig = false;
-                document.body.style.cursor = "";
-                document.body.style.userSelect = "";
-            }
-        });
-    }
 });
 

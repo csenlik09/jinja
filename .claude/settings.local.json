@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(git commit:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(\"c:\\Users\\megamind\\Claude\\jinja\\static\\app.js\")",
+      "Bash(scp:*)",
+      "Bash(ssh-copy-id:*)",
+      "Bash(ssh:*)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" diff templates/index.html)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" checkout templates/index.html)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" log --oneline templates/index.html)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" checkout templates/index.html static/app.js)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" checkout 056f959 -- templates/index.html static/app.js)",
+      "Bash(docker cp:*)",
+      "Bash(docker restart:*)",
+      "Bash(podman cp:*)",
+      "Bash(podman restart:*)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" add -A)",
+      "Bash(git -C \"c:\\Users\\megamind\\Claude\\jinja\" status)"
     ],
     "deny": [],
     "ask": []

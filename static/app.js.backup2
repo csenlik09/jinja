@@ -235,11 +235,6 @@ async function handleFileUpload(event) {
                 <div style="color: #999; font-size: 0.9em;">
                     ${result.data.length} rows loaded
                 </div>
-                <div style="margin-top: 15px;">
-                    <button class="button button-secondary" onclick="resetUploadArea()" style="font-size: 0.9em;">
-                        📤 Upload Another File
-                    </button>
-                </div>
             `;
 
             // Display editable preview table
@@ -435,7 +430,7 @@ function displayConfigs(configs) {
                 ${errorConfigs.map(config => `
                     <div style="margin-bottom: 10px; padding: 8px; background: #2d1515; border-radius: 4px;">
                         <div style="color: #ff8080; font-size: 0.9em; margin-bottom: 4px;">
-                            ${config.row.host_type || 'N/A'}/${config.row.port_type || 'N/A'}/${config.row.switch_os || 'N/A'}
+                            ${config.row.host_type || 'N/A'}/${config.row.vendor || 'N/A'}/${config.row.os || 'N/A'}
                         </div>
                         <div style="color: #ffcccc; font-size: 0.85em;">${config.error}</div>
                     </div>
@@ -466,7 +461,7 @@ function displayConfigs(configs) {
                 ${errorConfigs.map(config => `
                     <div style="margin-bottom: 10px; padding: 8px; background: #2d1515; border-radius: 4px;">
                         <div style="color: #ff8080; font-size: 0.9em; margin-bottom: 4px;">
-                            ${config.row.host_type || 'N/A'}/${config.row.port_type || 'N/A'}/${config.row.switch_os || 'N/A'}
+                            ${config.row.host_type || 'N/A'}/${config.row.vendor || 'N/A'}/${config.row.os || 'N/A'}
                         </div>
                         <div style="color: #ffcccc; font-size: 0.85em;">${config.error}</div>
                     </div>
@@ -525,11 +520,6 @@ function fallbackCopyToClipboard(text) {
     document.body.removeChild(textArea);
 }
 
-function resetUploadArea() {
-    // Simply reload the page to reset everything
-    window.location.reload();
-}
-
 function downloadConfig() {
     if (!window.currentCombinedConfig) {
         alert('No config to download');
@@ -586,8 +576,8 @@ function searchTemplates() {
     const filtered = allTemplates.filter(t => {
         return t.name.toLowerCase().includes(searchTerm) ||
                t.host_type.toLowerCase().includes(searchTerm) ||
-               t.port_type.toLowerCase().includes(searchTerm) ||
-               t.switch_os.toLowerCase().includes(searchTerm) ||
+               t.vendor.toLowerCase().includes(searchTerm) ||
+               t.os.toLowerCase().includes(searchTerm) ||
                (t.description && t.description.toLowerCase().includes(searchTerm));
     });
 
@@ -606,7 +596,7 @@ function displayTemplates(templates) {
         <div class="template-item" onclick="selectTemplate(${t.id}, event)">
             <div class="template-item-title">${t.name}</div>
             <div class="template-item-meta">
-                ${t.host_type} | ${t.port_type} | ${t.switch_os}
+                ${t.host_type} | ${t.vendor} | ${t.os}
             </div>
         </div>
     `).join('');
@@ -637,7 +627,7 @@ async function showTemplateForm(template = null) {
     const actionsContainer = document.getElementById('formActions');
 
     const hostTypes = await fetch('/api/host-types').then(r => r.json());
-    const portTypes = await fetch('/api/port-types').then(r => r.json());
+    const vendors = await fetch('/api/vendors').then(r => r.json());
 
     formContainer.innerHTML = `
         <div class="form-group">
@@ -654,15 +644,15 @@ async function showTemplateForm(template = null) {
 
         <div class="form-group">
             <label class="form-label">Port Type *</label>
-            <select class="form-select" id="templatePortType" onchange="loadOSOptions()" required>
-                ${portTypes.map(pt => `<option value="${pt}" ${template && template.port_type === pt ? 'selected' : ''}>${pt}</option>`).join('')}
+            <select class="form-select" id="templateVendor" onchange="loadOSOptions()" required>
+                ${vendors.map(v => `<option value="${v}" ${template && template.vendor === v ? 'selected' : ''}>${v}</option>`).join('')}
             </select>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Switch OS *</label>
-            <select class="form-select" id="templateSwitchOS" required>
-                ${template ? `<option value="${template.switch_os}" selected>${template.switch_os}</option>` : ''}
+            <label class="form-label">OS *</label>
+            <select class="form-select" id="templateOS" required>
+                ${template ? `<option value="${template.os}" selected>${template.os}</option>` : ''}
             </select>
         </div>
 
@@ -689,13 +679,14 @@ async function showTemplateForm(template = null) {
 }
 
 async function loadOSOptions() {
-    const osSelect = document.getElementById('templateSwitchOS');
+    const vendor = document.getElementById('templateVendor').value;
+    const osSelect = document.getElementById('templateOS');
     const currentOS = osSelect.value;
 
-    const osTypes = await fetch('/api/switch-os-types').then(r => r.json());
+    const osTypes = await fetch(`/api/os-types?vendor=${vendor}`).then(r => r.json());
 
-    osSelect.innerHTML = osTypes.map(osType => `
-        <option value="${osType}" ${osType === currentOS ? 'selected' : ''}>${osType}</option>
+    osSelect.innerHTML = osTypes.map(os => `
+        <option value="${os}" ${os === currentOS ? 'selected' : ''}>${os}</option>
     `).join('');
 }
 
@@ -710,12 +701,12 @@ function createNewTemplate() {
 async function saveTemplate() {
     const name = document.getElementById('templateName').value;
     const hostType = document.getElementById('templateHostType').value;
-    const portType = document.getElementById('templatePortType').value;
-    const switchOS = document.getElementById('templateSwitchOS').value;
+    const vendor = document.getElementById('templateVendor').value;
+    const os = document.getElementById('templateOS').value;
     const description = document.getElementById('templateDescription').value;
     const content = document.getElementById('templateContent').value;
 
-    if (!name || !hostType || !portType || !switchOS || !content) {
+    if (!name || !hostType || !vendor || !os || !content) {
         alert('Please fill in all required fields');
         return;
     }
@@ -723,8 +714,8 @@ async function saveTemplate() {
     const data = {
         name,
         host_type: hostType,
-        port_type: portType,
-        switch_os: switchOS,
+        vendor,
+        os,
         description,
         template_content: content
     };
@@ -894,7 +885,7 @@ function closeVendorManager() {
 
 async function loadVendorsList() {
     try {
-        const response = await fetch('/api/port-types');
+        const response = await fetch('/api/vendors');
         const vendors = await response.json();
 
         document.getElementById('vendorsList').innerHTML = vendors.map(v => `
@@ -919,7 +910,7 @@ async function addVendor() {
     }
 
     try {
-        const response = await fetch('/api/port-types', {
+        const response = await fetch('/api/vendors', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name})
@@ -943,7 +934,7 @@ async function deleteVendor(name) {
     if (!confirm(`Delete "${name}"? This may affect existing templates.`)) return;
 
     try {
-        const response = await fetch('/api/port-types/delete', {
+        const response = await fetch('/api/vendors/delete', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name})
@@ -975,13 +966,13 @@ function closeOSManager() {
 
 async function loadOSList() {
     try {
-        const response = await fetch('/api/switch-os-types');
+        const response = await fetch('/api/os-types');
         const osTypes = await response.json();
 
-        document.getElementById('osList').innerHTML = osTypes.map(switch_os => `
+        document.getElementById('osList').innerHTML = osTypes.map(os => `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2d2d30; border-radius: 4px; margin-bottom: 8px;">
-                <span style="color: #ccc;">${switch_os}</span>
-                <button onclick="deleteOS('${switch_os.replace(/'/g, "\\'")}')" style="background: #f44336; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
+                <span style="color: #ccc;">${os}</span>
+                <button onclick="deleteOS('${os.replace(/'/g, "\\'")}')" style="background: #f44336; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.85em;">Delete</button>
             </div>
         `).join('') || '<div style="color: #999; padding: 20px; text-align: center;">No OS types</div>';
     } catch (error) {
@@ -1000,7 +991,7 @@ async function addOS() {
     }
 
     try {
-        const response = await fetch('/api/switch-os-types', {
+        const response = await fetch('/api/os-types', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name})
@@ -1024,7 +1015,7 @@ async function deleteOS(name) {
     if (!confirm(`Delete "${name}"? This may affect existing templates.`)) return;
 
     try {
-        const response = await fetch('/api/switch-os-types/delete', {
+        const response = await fetch('/api/os-types/delete', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({name})
@@ -1081,42 +1072,4 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-
-    // Config Generator resizer
-    const resizer = document.getElementById("resizer");
-    const leftPanelConfig = document.getElementById("leftPanel");
-    const configGenerator = document.getElementById("config-generator");
-
-    if (resizer && leftPanelConfig && configGenerator) {
-        let isResizingConfig = false;
-
-        resizer.addEventListener("mousedown", (e) => {
-            isResizingConfig = true;
-            document.body.style.cursor = "col-resize";
-            document.body.style.userSelect = "none";
-            e.preventDefault();
-        });
-
-        document.addEventListener("mousemove", (e) => {
-            if (!isResizingConfig) return;
-
-            const containerRect = configGenerator.getBoundingClientRect();
-            const newWidth = e.clientX - containerRect.left;
-            const percentage = (newWidth / containerRect.width) * 100;
-
-            // Keep between 20% and 80%
-            if (percentage >= 20 && percentage <= 80) {
-                leftPanelConfig.style.width = `${percentage}%`;
-            }
-        });
-
-        document.addEventListener("mouseup", () => {
-            if (isResizingConfig) {
-                isResizingConfig = false;
-                document.body.style.cursor = "";
-                document.body.style.userSelect = "";
-            }
-        });
-    }
 });
-
