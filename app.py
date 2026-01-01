@@ -6,6 +6,7 @@ import pandas as pd
 from io import BytesIO
 from database import Database
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -125,8 +126,7 @@ def create_template():
             port_type=data['port_type'],
             switch_os=data['switch_os'],
             template_content=data['template_content'],
-            description=data.get('description', ''),
-            fields=data.get('fields', [])
+            version_description=data.get('version_description', '')
         )
         return jsonify({'success': True, 'template_id': template_id})
     except Exception as e:
@@ -145,6 +145,63 @@ def update_template(template_id):
 def delete_template(template_id):
     try:
         db.delete_template(template_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/versions', methods=['GET'])
+def get_template_versions(template_id):
+    try:
+        versions = db.get_template_versions(template_id)
+        return jsonify(versions)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/versions', methods=['POST'])
+def create_template_version(template_id):
+    try:
+        data = request.get_json()
+        version_num = db.create_template_version(
+            template_id,
+            data.get('template_content'),
+            data.get('version_name'),
+            data.get('version_description', '')
+        )
+        return jsonify({'success': True, 'version': version_num})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/versions/<int:version>', methods=['GET'])
+def get_template_version(template_id, version):
+    try:
+        version_data = db.get_template_version(template_id, version)
+        if version_data:
+            return jsonify(version_data)
+        return jsonify({'error': 'Version not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/versions/<int:version>', methods=['PUT'])
+def update_template_version(template_id, version):
+    try:
+        data = request.get_json()
+        db.update_template_version(template_id, version, **data)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/versions/<int:version>', methods=['DELETE'])
+def delete_template_version(template_id, version):
+    try:
+        db.delete_template_version(template_id, version)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/templates/<int:template_id>/active-version/<int:version>', methods=['POST'])
+def set_active_version(template_id, version):
+    try:
+        db.set_active_version(template_id, version)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -270,59 +327,6 @@ def generate_configs():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/download-template-excel/<int:template_id>', methods=['GET'])
-def download_template_excel(template_id):
-    try:
-        template_obj = db.get_template(template_id)
-
-        if not template_obj:
-            return jsonify({'error': 'Template not found'}), 404
-
-        # Extract variables from template
-        import re
-        template_content = template_obj['template_content']
-
-        # Find all variable references like p.variable_name, row.variable_name, etc.
-        # Look for patterns: p.field, row.field, item.field, sw.field
-        field_pattern = r'(?:p|row|item|switch|port|sw)\.([\w_]+)'
-        matches = re.findall(field_pattern, template_content)
-
-        # Also find field names in groupby('field_name') patterns
-        groupby_pattern = r"groupby\(['\"](\w+)['\"]\)"
-        groupby_fields = re.findall(groupby_pattern, template_content)
-
-        # Combine all field names
-        all_fields = list(set(matches + groupby_fields))
-
-        # Filter out Jinja2/Python built-in methods and properties
-        excluded = ['list', 'dict', 'items', 'keys', 'values', 'append', 'join', 'split',
-                    'strip', 'upper', 'lower', 'replace', 'format', 'grouper', 'first',
-                    'last', 'index', 'count', 'length', 'defined', 'groupby']
-        field_names = sorted([f for f in all_fields if f not in excluded])
-
-        # Create column list with host_type, port_type, switch_os as first 3 columns
-        columns = ['host_type', 'port_type', 'switch_os'] + field_names
-
-        df = pd.DataFrame(columns=columns)
-
-        # Save to BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Config Data')
-        output.seek(0)
-
-        filename = f'template_{template_obj["name"]}.xlsx'
-
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
 # ========== Metadata Management API Endpoints ==========
 
 @app.route('/api/host-types', methods=['POST'])
@@ -376,6 +380,53 @@ def remove_switch_os_type():
         data = request.get_json()
         db.remove_switch_os_type(data['name'])
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/export-database', methods=['GET'])
+def export_database():
+    try:
+        db_path = 'data/templates.db'
+        return send_file(
+            db_path,
+            mimetype='application/x-sqlite3',
+            as_attachment=True,
+            download_name=f'templates_backup_{datetime.now().strftime("%Y-%m-%d")}.db'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/import-database', methods=['POST'])
+def import_database():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        if not file.filename.endswith('.db'):
+            return jsonify({'success': False, 'error': 'Invalid file type. Please upload .db file.'}), 400
+
+        # Save the uploaded file to replace the current database
+        db_path = 'data/templates.db'
+
+        # Create backup of current database before replacing
+        backup_path = f'data/templates_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
+        if os.path.exists(db_path):
+            import shutil
+            shutil.copy2(db_path, backup_path)
+
+        # Save the new database file
+        file.save(db_path)
+
+        # Reinitialize the database connection
+        global db
+        db = Database()
+
+        return jsonify({'success': True})
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 

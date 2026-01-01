@@ -103,13 +103,107 @@ class Database:
                 host_type TEXT NOT NULL,
                 port_type TEXT NOT NULL,
                 switch_os TEXT NOT NULL,
-                template_content TEXT NOT NULL,
-                description TEXT,
+                active_version INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(host_type, port_type, switch_os)
             )
         ''')
+
+        # Check if old template_versions table exists with wrong schema and drop it first
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='template_versions'")
+        if cursor.fetchone():
+            cursor.execute("PRAGMA table_info(template_versions)")
+            version_columns = {col[1]: col for col in cursor.fetchall()}
+
+            # If old schema (missing version_name), drop it
+            if 'version_name' not in version_columns:
+                print("Dropping old template_versions table with incompatible schema...")
+                cursor.execute('DROP TABLE template_versions')
+
+        # Migration: Rename version column to active_version and move content to versions table
+        cursor.execute("PRAGMA table_info(templates)")
+        columns = {col[1]: col for col in cursor.fetchall()}
+
+        if 'template_content' in columns:
+            print("Migrating templates to new version system...")
+
+            # Create new templates table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS templates_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    host_type TEXT NOT NULL,
+                    port_type TEXT NOT NULL,
+                    switch_os TEXT NOT NULL,
+                    active_version INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(host_type, port_type, switch_os)
+                )
+            ''')
+
+            # Copy template metadata
+            cursor.execute('''
+                INSERT INTO templates_new (id, name, host_type, port_type, switch_os, active_version, created_at, updated_at)
+                SELECT id, name, host_type, port_type, switch_os,
+                       COALESCE(version, 1) as active_version,
+                       created_at, updated_at
+                FROM templates
+            ''')
+
+            # Get template content to migrate
+            cursor.execute('SELECT id, template_content, description, COALESCE(version, 1) as version FROM templates')
+            old_templates = cursor.fetchall()
+
+            # Drop old templates table and rename new one
+            cursor.execute('DROP TABLE templates')
+            cursor.execute('ALTER TABLE templates_new RENAME TO templates')
+            print("Templates table migration complete!")
+
+            # Now create template_versions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS template_versions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    template_id INTEGER NOT NULL,
+                    version INTEGER NOT NULL,
+                    version_name TEXT NOT NULL,
+                    version_description TEXT,
+                    template_content TEXT NOT NULL,
+                    is_active INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(template_id, version),
+                    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+                )
+            ''')
+
+            # Migrate content to template_versions
+            for tmpl in old_templates:
+                cursor.execute('''
+                    INSERT INTO template_versions
+                    (template_id, version, version_name, version_description, template_content, is_active)
+                    VALUES (?, ?, ?, ?, ?, 1)
+                ''', (tmpl[0], tmpl[3], f'v{tmpl[3]}', tmpl[2], tmpl[1]))
+
+            print("Template versions migration complete!")
+        else:
+            # Create template_versions table if not migrating
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS template_versions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    template_id INTEGER NOT NULL,
+                    version INTEGER NOT NULL,
+                    version_name TEXT NOT NULL,
+                    version_description TEXT,
+                    template_content TEXT NOT NULL,
+                    is_active INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(template_id, version),
+                    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+                )
+            ''')
 
         # Host types table
         cursor.execute('''
@@ -169,25 +263,24 @@ class Database:
         conn.close()
 
     # Template CRUD operations
-    def create_template(self, name, host_type, port_type, switch_os, template_content, description='', fields=None):
+    def create_template(self, name, host_type, port_type, switch_os, template_content, version_description='', fields=None):
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
+            # Create template metadata
             cursor.execute('''
-                INSERT INTO templates (name, host_type, port_type, switch_os, template_content, description)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (name, host_type, port_type, switch_os, template_content, description))
+                INSERT INTO templates (name, host_type, port_type, switch_os, active_version)
+                VALUES (?, ?, ?, ?, 1)
+            ''', (name, host_type, port_type, switch_os))
 
             template_id = cursor.lastrowid
 
-            # Add template fields if provided
-            if fields:
-                for field in fields:
-                    cursor.execute('''
-                        INSERT INTO template_fields (template_id, field_name, field_type, required, default_value)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (template_id, field['name'], field['type'], field.get('required', True), field.get('default', '')))
+            # Create first version
+            cursor.execute('''
+                INSERT INTO template_versions (template_id, version, version_name, version_description, template_content, is_active)
+                VALUES (?, 1, 'v1', ?, ?, 1)
+            ''', (template_id, version_description, template_content))
 
             conn.commit()
             return template_id
@@ -198,18 +291,33 @@ class Database:
             conn.close()
 
     def get_template(self, template_id):
+        """Get template with its active version content"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM templates WHERE id = ?', (template_id,))
+
+        cursor.execute('''
+            SELECT t.*, tv.template_content, tv.version_description
+            FROM templates t
+            LEFT JOIN template_versions tv ON t.id = tv.template_id AND tv.version = t.active_version
+            WHERE t.id = ?
+        ''', (template_id,))
+
         template = cursor.fetchone()
         conn.close()
         return dict(template) if template else None
 
     def get_template_by_name(self, name):
-        """Get template by name (case-insensitive)"""
+        """Get template by name (case-insensitive) with active version content"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM templates WHERE LOWER(name) = LOWER(?)', (name,))
+
+        cursor.execute('''
+            SELECT t.*, tv.template_content, tv.version_description
+            FROM templates t
+            LEFT JOIN template_versions tv ON t.id = tv.template_id AND tv.version = t.active_version
+            WHERE LOWER(t.name) = LOWER(?)
+        ''', (name,))
+
         template = cursor.fetchone()
         conn.close()
         return dict(template) if template else None
@@ -245,11 +353,12 @@ class Database:
         return [dict(t) for t in templates]
 
     def update_template(self, template_id, **kwargs):
+        """Update template metadata only (name, host_type, port_type, switch_os)"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
-            allowed_fields = ['name', 'host_type', 'port_type', 'switch_os', 'template_content', 'description']
+            allowed_fields = ['name', 'host_type', 'port_type', 'switch_os']
             updates = []
             values = []
 
@@ -356,3 +465,141 @@ class Database:
         cursor.execute('DELETE FROM switch_os_types WHERE name = ?', (name,))
         conn.commit()
         conn.close()
+
+    # Template versioning methods
+    def get_template_versions(self, template_id):
+        """Get all versions for a template"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM template_versions
+            WHERE template_id = ?
+            ORDER BY version ASC
+        ''', (template_id,))
+        versions = cursor.fetchall()
+        conn.close()
+        return [dict(v) for v in versions]
+
+    def get_template_version(self, template_id, version):
+        """Get a specific version of a template with template metadata"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT t.*, tv.version, tv.version_name, tv.version_description, tv.template_content, tv.is_active, tv.updated_at as version_updated_at
+            FROM templates t
+            JOIN template_versions tv ON t.id = tv.template_id
+            WHERE tv.template_id = ? AND tv.version = ?
+        ''', (template_id, version))
+        version_data = cursor.fetchone()
+        conn.close()
+        return dict(version_data) if version_data else None
+
+    def create_template_version(self, template_id, template_content, version_name, version_description=''):
+        """Create a new version for a template"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Get the next version number
+            cursor.execute('SELECT MAX(version) as max_ver FROM template_versions WHERE template_id = ?', (template_id,))
+            result = cursor.fetchone()
+            next_version = (result['max_ver'] or 0) + 1
+
+            # Create new version
+            cursor.execute('''
+                INSERT INTO template_versions (template_id, version, version_name, version_description, template_content, is_active)
+                VALUES (?, ?, ?, ?, ?, 0)
+            ''', (template_id, next_version, version_name, version_description, template_content))
+
+            conn.commit()
+            return next_version
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def update_template_version(self, template_id, version, **kwargs):
+        """Update a specific version (name, description, content)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            allowed_fields = ['version_name', 'version_description', 'template_content']
+            updates = []
+            values = []
+
+            for key, value in kwargs.items():
+                if key in allowed_fields:
+                    updates.append(f'{key} = ?')
+                    values.append(value)
+
+            if updates:
+                updates.append('updated_at = ?')
+                values.append(datetime.now())
+                values.append(template_id)
+                values.append(version)
+                query = f"UPDATE template_versions SET {', '.join(updates)} WHERE template_id = ? AND version = ?"
+                cursor.execute(query, values)
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def delete_template_version(self, template_id, version):
+        """Delete a specific version (cannot delete active version)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Check if this is the active version
+            cursor.execute('SELECT active_version FROM templates WHERE id = ?', (template_id,))
+            template = cursor.fetchone()
+
+            if template and template['active_version'] == version:
+                raise ValueError('Cannot delete the active version. Please set another version as active first.')
+
+            # Check if it's the only version
+            cursor.execute('SELECT COUNT(*) as count FROM template_versions WHERE template_id = ?', (template_id,))
+            count_result = cursor.fetchone()
+
+            if count_result['count'] <= 1:
+                raise ValueError('Cannot delete the only version. Templates must have at least one version.')
+
+            cursor.execute('DELETE FROM template_versions WHERE template_id = ? AND version = ?', (template_id, version))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def set_active_version(self, template_id, version):
+        """Set a version as the active/primary version"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Verify version exists
+            cursor.execute('SELECT id FROM template_versions WHERE template_id = ? AND version = ?', (template_id, version))
+            if not cursor.fetchone():
+                raise ValueError(f'Version {version} not found for template {template_id}')
+
+            # Update active version in templates table
+            cursor.execute('UPDATE templates SET active_version = ?, updated_at = ? WHERE id = ?',
+                         (version, datetime.now(), template_id))
+
+            # Update is_active flags in template_versions
+            cursor.execute('UPDATE template_versions SET is_active = 0 WHERE template_id = ?', (template_id,))
+            cursor.execute('UPDATE template_versions SET is_active = 1 WHERE template_id = ? AND version = ?',
+                         (template_id, version))
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()

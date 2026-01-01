@@ -322,18 +322,7 @@ function displayEditablePreview(data, columns) {
         // Line number column
         tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center; color: #999; background: #1a1a1a; font-family: 'Consolas', monospace; font-size: 0.85em;">${rowIndex + 1}</td>`;
         columns.forEach(col => {
-            let value = row[col] !== undefined && row[col] !== null ? row[col] : '';
-
-            // Clean switch_port value: remove "Port-" prefix and leading zeros
-            if (col === 'switch_port' && value) {
-                let cleanedValue = String(value).replace(/^Port-/i, '');
-                // Remove leading zeros (e.g., "04" becomes "4")
-                cleanedValue = cleanedValue.replace(/^0+(\d)/, '$1');
-                // Update the actual data
-                row[col] = cleanedValue;
-                value = cleanedValue;
-            }
-
+            const value = row[col] !== undefined && row[col] !== null ? row[col] : '';
             tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center;">
                 <input type="text"
                        class="cell-input"
@@ -632,8 +621,6 @@ async function selectTemplate(templateId, event) {
         const template = await response.json();
 
         currentTemplateId = templateId;
-        currentTemplateVersion = template.active_version || 1;
-        isEditMode = false;
 
         document.querySelectorAll('.template-item').forEach(item => {
             item.classList.remove('selected');
@@ -642,7 +629,7 @@ async function selectTemplate(templateId, event) {
             event.target.closest('.template-item').classList.add('selected');
         }
 
-        await showTemplateForm(template);
+        showTemplateForm(template);
     } catch (error) {
         console.error('Error loading template:', error);
     }
@@ -652,122 +639,73 @@ async function showTemplateForm(template = null) {
     const formContainer = document.getElementById('templateForm');
     const actionsContainer = document.getElementById('formActions');
 
-    if (!template) {
-        // Creating new template
-        const hostTypes = await fetch('/api/host-types').then(r => r.json());
-        const portTypes = await fetch('/api/port-types').then(r => r.json());
-
-        formContainer.innerHTML = `
-            <div class="form-group">
-                <label class="form-label">Template Name *</label>
-                <input type="text" class="form-input" id="templateName" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Host Type *</label>
-                <select class="form-select" id="templateHostType" required>
-                    ${hostTypes.map(ht => `<option value="${ht}">${ht}</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Port Type *</label>
-                <select class="form-select" id="templatePortType" onchange="loadOSOptions()" required>
-                    ${portTypes.map(pt => `<option value="${pt}">${pt}</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Switch OS *</label>
-                <select class="form-select" id="templateSwitchOS" required></select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Version Description (optional)</label>
-                <input type="text" class="form-input" id="versionDescription" placeholder="Describe this version...">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Template Content (Jinja2) *</label>
-                <textarea class="form-textarea" id="templateContent" rows="20" required></textarea>
-            </div>
-        `;
-
-        actionsContainer.innerHTML = `
-            <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
-            <button class="button" onclick="saveTemplate()">Save Template</button>
-        `;
-        actionsContainer.style.display = 'flex';
-        await loadOSOptions();
-        return;
-    }
-
-    // Load versions for existing template
-    const versions = await fetch(`/api/templates/${template.id}/versions`).then(r => r.json());
-    const currentVersion = await fetch(`/api/templates/${template.id}/versions/${currentTemplateVersion}`).then(r => r.json());
-
     const hostTypes = await fetch('/api/host-types').then(r => r.json());
     const portTypes = await fetch('/api/port-types').then(r => r.json());
-    const osTypes = await fetch('/api/switch-os-types').then(r => r.json());
-
-    const readonly = !isEditMode;
-    const readonlyAttr = readonly ? 'disabled' : '';
 
     formContainer.innerHTML = `
         <div class="form-group">
             <label class="form-label">Template Name *</label>
-            <input type="text" class="form-input" id="templateName" value="${escapeHtml(template.name)}" ${readonlyAttr} required>
+            <input type="text" class="form-input" id="templateName" value="${template ? template.name : ''}" required>
         </div>
+
         <div class="form-group">
             <label class="form-label">Host Type *</label>
-            <select class="form-select" id="templateHostType" ${readonlyAttr} required>
-                ${hostTypes.map(ht => `<option value="${ht}" ${template.host_type === ht ? 'selected' : ''}>${ht}</option>`).join('')}
+            <select class="form-select" id="templateHostType" required>
+                ${hostTypes.map(ht => `<option value="${ht}" ${template && template.host_type === ht ? 'selected' : ''}>${ht}</option>`).join('')}
             </select>
         </div>
+
         <div class="form-group">
             <label class="form-label">Port Type *</label>
-            <select class="form-select" id="templatePortType" ${readonlyAttr} required>
-                ${portTypes.map(pt => `<option value="${pt}" ${template.port_type === pt ? 'selected' : ''}>${pt}</option>`).join('')}
+            <select class="form-select" id="templatePortType" onchange="loadOSOptions()" required>
+                ${portTypes.map(pt => `<option value="${pt}" ${template && template.port_type === pt ? 'selected' : ''}>${pt}</option>`).join('')}
             </select>
         </div>
+
         <div class="form-group">
             <label class="form-label">Switch OS *</label>
-            <select class="form-select" id="templateSwitchOS" ${readonlyAttr} required>
-                ${osTypes.map(os => `<option value="${os}" ${template.switch_os === os ? 'selected' : ''}>${os}</option>`).join('')}
+            <select class="form-select" id="templateSwitchOS" required>
+                ${template ? `<option value="${template.switch_os}" selected>${template.switch_os}</option>` : ''}
             </select>
         </div>
+
         <div class="form-group">
-            <label class="form-label">Version</label>
-            <select class="form-select" id="versionSelect" onchange="loadVersion()" style="margin-bottom: 10px;">
-                ${versions.map(v => `<option value="${v.version}" ${v.version === currentTemplateVersion ? 'selected' : ''}>${escapeHtml(v.version_name)}${v.is_active ? ' (Active)' : ''}</option>`).join('')}
-                <option value="new">+ Create New Version</option>
-            </select>
+            <label class="form-label">Description</label>
+            <input type="text" class="form-input" id="templateDescription" value="${template ? template.description || '' : ''}">
         </div>
+
+        ${template ? `
         <div class="form-group">
-            <label class="form-label">Version Name</label>
-            <input type="text" class="form-input" id="versionName" value="${escapeHtml(currentVersion.version_name || '')}" ${readonlyAttr}>
+            <label class="form-label">Current Version</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="text" class="form-input" value="v${template.version || 1}" disabled style="flex: 0 0 100px; background: #1a1a1a; color: #999;">
+                <button class="button" onclick="showVersionHistory(${template.id})" type="button" style="background: #555; padding: 8px 15px;">View History</button>
+            </div>
         </div>
+        ` : ''}
+
+        ${template ? `
         <div class="form-group">
-            <label class="form-label">Version Description</label>
-            <input type="text" class="form-input" id="versionDescription" value="${escapeHtml(currentVersion.version_description || '')}" ${readonlyAttr}>
+            <label class="form-label">Version Description (optional)</label>
+            <input type="text" class="form-input" id="versionDescription" placeholder="Describe changes in this version...">
         </div>
+        ` : ''}
+
         <div class="form-group">
             <label class="form-label">Template Content (Jinja2) *</label>
-            <textarea class="form-textarea" id="templateContent" rows="20" ${readonlyAttr} required>${escapeHtml(currentVersion.template_content || '')}</textarea>
+            <textarea class="form-textarea" id="templateContent" rows="20" required>${template ? template.template_content : ''}</textarea>
         </div>
     `;
 
-    // Update action buttons based on mode
-    if (readonly) {
-        actionsContainer.innerHTML = `
-            <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
-            <button class="button" style="background: #f44336;" onclick="deleteVersion()">Delete Version</button>
-            <button class="button" onclick="enableEditMode()" style="background: #FF9800;">Edit</button>
-            <button class="button" onclick="setActiveVersion()" style="background: #4CAF50;">Active</button>
-        `;
-    } else {
-        actionsContainer.innerHTML = `
-            <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
-            <button class="button" style="background: #f44336;" onclick="deleteTemplate()">Delete</button>
-            <button class="button" onclick="saveTemplate()">Save Template</button>
-        `;
-    }
     actionsContainer.style.display = 'flex';
+
+    if (template) {
+        document.getElementById('deleteBtn').style.display = 'block';
+        loadOSOptions();
+    } else {
+        document.getElementById('deleteBtn').style.display = 'none';
+        loadOSOptions();
+    }
 }
 
 async function loadOSOptions() {
@@ -794,80 +732,56 @@ async function saveTemplate() {
     const hostType = document.getElementById('templateHostType').value;
     const portType = document.getElementById('templatePortType').value;
     const switchOS = document.getElementById('templateSwitchOS').value;
+    const description = document.getElementById('templateDescription').value;
     const content = document.getElementById('templateContent').value;
     const versionDescriptionEl = document.getElementById('versionDescription');
-    const versionDescription = versionDescriptionEl ? versionDescriptionEl.value : '';
-    const versionName = document.getElementById('versionName')?.value || '';
+    const versionDescription = versionDescriptionEl ? versionDescriptionEl.value : null;
 
     if (!name || !hostType || !portType || !switchOS || !content) {
         alert('Please fill in all required fields');
         return;
     }
 
+    const data = {
+        name,
+        host_type: hostType,
+        port_type: portType,
+        switch_os: switchOS,
+        description,
+        template_content: content
+    };
+
+    // Add version description if updating an existing template
+    if (currentTemplateId && versionDescription) {
+        data.version_description = versionDescription;
+    }
+
     try {
-        if (!currentTemplateId) {
-            // Creating new template
-            const response = await fetch('/api/templates', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    name,
-                    host_type: hostType,
-                    port_type: portType,
-                    switch_os: switchOS,
-                    template_content: content,
-                    version_description: versionDescription
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert('Template created successfully!');
-                await loadTemplates();
-                currentTemplateId = result.template_id;
-                currentTemplateVersion = 1;
-                isEditMode = false;
-                const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-                await showTemplateForm(template);
-            } else {
-                alert('Error creating template: ' + result.error);
-            }
-        } else if (isEditMode) {
-            // Update existing version
-            const response = await fetch(`/api/templates/${currentTemplateId}/versions/${currentTemplateVersion}`, {
+        let response;
+        if (currentTemplateId) {
+            response = await fetch(`/api/templates/${currentTemplateId}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    version_name: versionName,
-                    version_description: versionDescription,
-                    template_content: content
-                })
+                body: JSON.stringify(data)
             });
+        } else {
+            response = await fetch('/api/templates', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+        }
 
-            const result = await response.json();
+        const result = await response.json();
 
-            if (result.success) {
-                // Also update template metadata
-                await fetch(`/api/templates/${currentTemplateId}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        name,
-                        host_type: hostType,
-                        port_type: portType,
-                        switch_os: switchOS
-                    })
-                });
-
-                alert('Template saved successfully!');
-                isEditMode = false;
-                await loadTemplates();
-                const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-                await showTemplateForm(template);
-            } else {
-                alert('Error saving template: ' + result.error);
+        if (result.success) {
+            alert('Template saved successfully!');
+            await loadTemplates();
+            if (!currentTemplateId && result.template_id) {
+                currentTemplateId = result.template_id;
             }
+        } else {
+            alert('Error saving template: ' + result.error);
         }
     } catch (error) {
         alert('Error saving template: ' + error.message);
@@ -901,8 +815,6 @@ async function deleteTemplate() {
 
 function cancelEdit() {
     currentTemplateId = null;
-    currentTemplateVersion = null;
-    isEditMode = false;
     document.getElementById('templateForm').innerHTML = `
         <div class="info-box">
             Select a template from the list or create a new one to start editing.
@@ -914,171 +826,7 @@ function cancelEdit() {
     });
 }
 
-async function loadVersion() {
-    const versionSelect = document.getElementById('versionSelect');
-    const selectedValue = versionSelect.value;
-
-    if (selectedValue === 'new') {
-        // Create new version
-        const versionName = prompt('Enter new version name:');
-        if (!versionName) {
-            versionSelect.value = currentTemplateVersion;
-            return;
-        }
-
-        const versionDescription = prompt('Enter version description (optional):') || '';
-        const content = document.getElementById('templateContent').value;
-
-        try {
-            const response = await fetch(`/api/templates/${currentTemplateId}/versions`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    version_name: versionName,
-                    version_description: versionDescription,
-                    template_content: content
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert('New version created successfully!');
-                currentTemplateVersion = result.version;
-                isEditMode = false;
-                const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-                await showTemplateForm(template);
-            } else {
-                alert('Error creating version: ' + result.error);
-                versionSelect.value = currentTemplateVersion;
-            }
-        } catch (error) {
-            alert('Error creating version: ' + error.message);
-            versionSelect.value = currentTemplateVersion;
-        }
-    } else {
-        // Load selected version
-        currentTemplateVersion = parseInt(selectedValue);
-        isEditMode = false;
-        const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-        await showTemplateForm(template);
-    }
-}
-
-async function enableEditMode() {
-    isEditMode = true;
-    const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-    await showTemplateForm(template);
-}
-
-async function setActiveVersion() {
-    if (!currentTemplateId || !currentTemplateVersion) return;
-
-    if (!confirm(`Set version ${currentTemplateVersion} as the active version?`)) return;
-
-    try {
-        const response = await fetch(`/api/templates/${currentTemplateId}/active-version/${currentTemplateVersion}`, {
-            method: 'POST'
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert('Active version updated successfully!');
-            await loadTemplates();
-            const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-            await showTemplateForm(template);
-        } else {
-            alert('Error setting active version: ' + result.error);
-        }
-    } catch (error) {
-        alert('Error setting active version: ' + error.message);
-    }
-}
-
-async function deleteVersion() {
-    if (!currentTemplateId || !currentTemplateVersion) return;
-
-    if (!confirm(`Are you sure you want to delete version ${currentTemplateVersion}?`)) return;
-
-    try {
-        const response = await fetch(`/api/templates/${currentTemplateId}/versions/${currentTemplateVersion}`, {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert('Version deleted successfully!');
-            await loadTemplates();
-            const template = await fetch(`/api/templates/${currentTemplateId}`).then(r => r.json());
-            currentTemplateVersion = template.active_version || 1;
-            isEditMode = false;
-            await showTemplateForm(template);
-        } else {
-            alert('Error deleting version: ' + result.error);
-        }
-    } catch (error) {
-        alert('Error deleting version: ' + error.message);
-    }
-}
-
 // ========== Metadata Management ==========
-
-// Export Database
-async function exportDatabase() {
-    try {
-        const response = await fetch('/api/export-database');
-        const blob = await response.blob();
-
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `templates_backup_${new Date().toISOString().split('T')[0]}.db`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    } catch (error) {
-        console.error('Error exporting database:', error);
-        alert('Error exporting database: ' + error.message);
-    }
-}
-
-// Import/Restore Database
-async function importDatabase(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (!confirm('Warning: This will replace your current database. All existing templates and settings will be lost. Continue?')) {
-        event.target.value = '';
-        return;
-    }
-
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('/api/import-database', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            alert('Database restored successfully! Reloading page...');
-            window.location.reload();
-        } else {
-            alert('Error restoring database: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Error importing database:', error);
-        alert('Error importing database: ' + error.message);
-    } finally {
-        event.target.value = '';
-    }
-}
 
 // Host Type Manager
 async function showHostTypeManager() {
@@ -1399,4 +1147,74 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+// ========== Version History Functions ==========
+async function showVersionHistory(templateId) {
+    try {
+        const response = await fetch(`/api/templates/${templateId}/versions`);
+        const versions = await response.json();
+
+        const modal = document.getElementById('versionHistoryModal');
+        const listContainer = document.getElementById('versionHistoryList');
+
+        if (versions.length === 0) {
+            listContainer.innerHTML = '<div style="color: #999; padding: 20px; text-align: center;">No version history available</div>';
+        } else {
+            listContainer.innerHTML = versions.map(v => `
+                <div style="background: #2d2d30; border-radius: 4px; padding: 15px; margin-bottom: 10px; border-left: 3px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <span style="color: #667eea; font-weight: bold; font-size: 1.1em;">Version ${v.version}</span>
+                            <span style="color: #999; margin-left: 10px; font-size: 0.9em;">${new Date(v.created_at).toLocaleString()}</span>
+                        </div>
+                        <button class="button" onclick="restoreVersion(${templateId}, ${v.version})" style="background: #4CAF50; padding: 6px 12px; font-size: 0.85em;">
+                            Restore
+                        </button>
+                    </div>
+                    ${v.version_description ? `<div style="color: #ccc; margin-bottom: 8px; font-style: italic;">${escapeHtml(v.version_description)}</div>` : ''}
+                    ${v.description ? `<div style="color: #999; font-size: 0.9em;"><strong>Template Description:</strong> ${escapeHtml(v.description)}</div>` : ''}
+                    <div style="color: #999; font-size: 0.85em; margin-top: 5px;">
+                        <strong>Config:</strong> ${escapeHtml(v.host_type)} / ${escapeHtml(v.port_type)} / ${escapeHtml(v.switch_os)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        modal.style.display = 'flex';
+    } catch (error) {
+        console.error('Error loading version history:', error);
+        alert('Error loading version history: ' + error.message);
+    }
+}
+
+async function restoreVersion(templateId, version) {
+    if (!confirm(`Are you sure you want to restore to version ${version}? This will create a new version with the content from version ${version}.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/templates/${templateId}/restore/${version}`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Successfully restored to version ${version}!`);
+            closeVersionHistory();
+            await loadTemplates();
+            if (currentTemplateId === templateId) {
+                await selectTemplate(templateId);
+            }
+        } else {
+            alert('Error restoring version: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error restoring version:', error);
+        alert('Error restoring version: ' + error.message);
+    }
+}
+
+function closeVersionHistory() {
+    document.getElementById('versionHistoryModal').style.display = 'none';
+}
 

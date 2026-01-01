@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Jinja2 Network Config Tool</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
@@ -427,7 +430,7 @@
 
     <div class="tab-container">
         <button class="tab-button active" onclick="switchTab('config-generator')">Config Generator</button>
-        <button class="tab-button" onclick="switchTab('template-manager')">Template Manager</button>
+        <button class="tab-button" onclick="switchTab('template-manager')">Manage Templates</button>
         <button class="tab-button" onclick="switchTab('jinja-tester')">Jinja Tester</button>
     </div>
 
@@ -497,11 +500,14 @@
                 </div>
                 <div class="filter-section">
                     <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px;">
-                        <button class="button" onclick="showHostTypeManager()" style="flex: 1; padding: 10px; margin: 0;">Manage Host Types</button>
-                        <button class="button" onclick="showVendorManager()" style="flex: 1; padding: 10px; margin: 0;">Manage Vendors</button>
-                        <button class="button" onclick="showOSManager()" style="flex: 1; padding: 10px; margin: 0;">Manage OS</button>
+                        <button class="button" onclick="showHostTypeManager()" style="flex: 1; padding: 10px; margin: 0;">Host Types</button>
+                        <button class="button" onclick="showVendorManager()" style="flex: 1; padding: 10px; margin: 0;">Port Types</button>
+                        <button class="button" onclick="showOSManager()" style="flex: 1; padding: 10px; margin: 0;">Switch OS</button>
                     </div>
-                    <button class="button" onclick="createNewTemplate()" style="width: 100%;">+ New Template</button>
+                    <button class="button" onclick="createNewTemplate()" style="width: 100%; margin-bottom: 10px;">+ New Template</button>
+                    <button class="button" onclick="exportDatabase()" style="width: 100%; background: #4CAF50; margin-bottom: 10px;">Backup</button>
+                    <input type="file" id="importDbFile" accept=".db" style="display: none;" onchange="importDatabase(event)">
+                    <button class="button" onclick="document.getElementById('importDbFile').click()" style="width: 100%; background: #FF9800;">Restore</button>
 
                     <!-- Hidden filter dropdowns (kept for backwards compatibility) -->
                     <select class="form-select" id="filterHostType" onchange="filterTemplates()" style="display: none;">
@@ -525,10 +531,9 @@
                     </div>
                 </div>
                 <div class="form-actions" id="formActions" style="display: none;">
-                    <button class="button" onclick="saveTemplate()">Save Template</button>
-                    <button class="button" onclick="downloadTemplateExcel()" id="downloadExcelBtn">Download Excel Template</button>
                     <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
                     <button class="button" style="background: #f44336;" onclick="deleteTemplate()" id="deleteBtn">Delete</button>
+                    <button class="button" onclick="saveTemplate()">Save</button>
                 </div>
             </div>
         </div>
@@ -538,7 +543,7 @@
     <div id="hostTypeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: #252526; border-radius: 8px; width: 400px; max-height: 80%; display: flex; flex-direction: column; border: 1px solid #667eea;">
             <div style="padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="color: #fff; margin: 0;">Manage Host Type</h2>
+                <h2 style="color: #fff; margin: 0;">Host Types</h2>
                 <button onclick="closeHostTypeManager()" style="background: none; border: none; color: #999; font-size: 24px; cursor: pointer;">&times;</button>
             </div>
             <div style="flex: 1; overflow: auto; padding: 20px;">
@@ -551,16 +556,16 @@
         </div>
     </div>
 
-    <!-- Switch Vendor Manager Modal -->
+    <!-- Port Type Manager Modal -->
     <div id="vendorModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: #252526; border-radius: 8px; width: 400px; max-height: 80%; display: flex; flex-direction: column; border: 1px solid #667eea;">
             <div style="padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="color: #fff; margin: 0;">Manage Switch Vendor</h2>
+                <h2 style="color: #fff; margin: 0;">Port Types</h2>
                 <button onclick="closeVendorManager()" style="background: none; border: none; color: #999; font-size: 24px; cursor: pointer;">&times;</button>
             </div>
             <div style="flex: 1; overflow: auto; padding: 20px;">
                 <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-                    <input type="text" id="newVendor" class="form-input" placeholder="New vendor" style="flex: 1;">
+                    <input type="text" id="newVendor" class="form-input" placeholder="New port type" style="flex: 1;">
                     <button class="button" onclick="addVendor()" style="padding: 8px 15px;">Add</button>
                 </div>
                 <div id="vendorsList" style="max-height: 400px; overflow-y: auto;"></div>
@@ -572,24 +577,19 @@
     <div id="osModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: #252526; border-radius: 8px; width: 400px; max-height: 80%; display: flex; flex-direction: column; border: 1px solid #667eea;">
             <div style="padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="color: #fff; margin: 0;">Manage Switch OS</h2>
+                <h2 style="color: #fff; margin: 0;">Switch OS</h2>
                 <button onclick="closeOSManager()" style="background: none; border: none; color: #999; font-size: 24px; cursor: pointer;">&times;</button>
             </div>
             <div style="flex: 1; overflow: auto; padding: 20px;">
-                <div style="margin-bottom: 15px;">
-                    <select id="newOSVendor" class="form-select" style="margin-bottom: 8px;">
-                        <option value="">Select vendor</option>
-                    </select>
-                    <div style="display: flex; gap: 5px;">
-                        <input type="text" id="newOS" class="form-input" placeholder="New OS" style="flex: 1;">
-                        <button class="button" onclick="addOS()" style="padding: 8px 15px;">Add</button>
-                    </div>
+                <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+                    <input type="text" id="newOS" class="form-input" placeholder="New switch OS" style="flex: 1;">
+                    <button class="button" onclick="addOS()" style="padding: 8px 15px;">Add</button>
                 </div>
                 <div id="osList" style="max-height: 400px; overflow-y: auto;"></div>
             </div>
         </div>
     </div>
 
-    <script src="/static/app.js?v=20251231b"></script>
+    <script src="/static/app.js?v=1767235770"></script>
 </body>
 </html>
