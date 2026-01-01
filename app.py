@@ -10,10 +10,21 @@ from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 from collections import deque
+import subprocess
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
+
+# Get current version from git
+def get_version():
+    try:
+        version = subprocess.check_output(['git', 'describe', '--tags', '--always'], cwd=os.path.dirname(__file__)).decode('utf-8').strip()
+        return version
+    except:
+        return 'v1.5'  # Fallback version
+
+APP_VERSION = get_version()
 
 # Configure logging
 if not os.path.exists('logs'):
@@ -64,7 +75,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/')
 def index():
-    response = render_template('index.html')
+    response = render_template('index.html', version=APP_VERSION)
     from flask import make_response
     resp = make_response(response)
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
