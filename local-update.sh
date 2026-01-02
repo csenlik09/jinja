@@ -41,7 +41,7 @@ docker rm jinja-template-app 2>/dev/null || true
 
 # Start new container
 docker run -d \
-    -p 8080:80 \
+    -p 80:80 \
     --name jinja-template-app \
     --restart unless-stopped \
     jinja-app || {
@@ -52,7 +52,7 @@ docker run -d \
 echo ""
 echo "✅ Update successful!"
 echo ""
-echo "📱 Application is running at: http://localhost:8080"
+echo "📱 Application is running at: http://localhost"
 echo ""
 
 # Show current version
@@ -67,9 +67,9 @@ sleep 2
 
 # Open browser
 if command -v open &> /dev/null; then
-    open http://localhost:8080
+    open http://localhost
 elif command -v xdg-open &> /dev/null; then
-    xdg-open http://localhost:8080
+    xdg-open http://localhost
 elif command -v start &> /dev/null; then
-    start http://localhost:8080
+    start http://localhost
 fi
