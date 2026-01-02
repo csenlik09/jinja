@@ -46,7 +46,7 @@ echo "🚀 Starting application..."
 
 # Run Docker container
 docker run -d \
-    -p 80:80 \
+    -p 8080:80 \
     --name jinja-template-app \
     --restart unless-stopped \
     jinja-app || {
@@ -57,7 +57,7 @@ docker run -d \
 echo ""
 echo "✅ Deployment successful!"
 echo ""
-echo "📱 Application is running at: http://localhost"
+echo "📱 Application is running at: http://localhost:8080"
 echo ""
 echo "Useful commands:"
 echo "  - View logs:        docker logs jinja-template-app"
@@ -71,11 +71,11 @@ sleep 2
 
 # Open browser (works on macOS, Linux, and Windows)
 if command -v open &> /dev/null; then
-    open http://localhost
+    open http://localhost:8080
 elif command -v xdg-open &> /dev/null; then
-    xdg-open http://localhost
+    xdg-open http://localhost:8080
 elif command -v start &> /dev/null; then
-    start http://localhost
+    start http://localhost:8080
 else
-    echo "Please open http://localhost in your browser"
+    echo "Please open http://localhost:8080 in your browser"
 fi
