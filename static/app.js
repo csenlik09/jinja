@@ -7,6 +7,13 @@ let isEditMode = false;
 let allTemplates = [];
 let generatedConfigs = [];
 
+// Filter/sort state for the preview table
+let tableColumns = [];         // Column names from last upload
+let filterState = {};          // { colName: Set<string> of selected (visible) values }
+let sortState = null;          // { col: string, dir: 'asc'|'desc' } or null
+let activeView = null;         // Filtered+sorted subset of uploadedData
+let openFilterDropdown = null; // Column name of currently open dropdown
+
 // Notification system
 function showNotification(title, message, type = 'info', buttons = null) {
     const modal = document.getElementById('notificationModal');
@@ -63,6 +70,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeJinjaTester();
     initializeTemplateManager();
     setupDragAndDrop();
+
+    // Close filter dropdown on outside click
+    document.addEventListener('mousedown', (e) => {
+        if (openFilterDropdown === null) return;
+        const panel = document.getElementById('colFilterDropdown');
+        if (panel && !panel.contains(e.target) && !e.target.closest('th[data-col]')) {
+            closeColumnFilter();
+        }
+    });
+
+    // Close filter dropdown when preview table is scrolled
+    const dataPreview = document.getElementById('dataPreview');
+    if (dataPreview) {
+        dataPreview.addEventListener('scroll', () => {
+            if (openFilterDropdown !== null) closeColumnFilter();
+        });
+    }
 
     // Set version timestamp
     const now = new Date();
@@ -365,6 +389,166 @@ function sortDataByPortOrder(data) {
     return sortedData;
 }
 
+// ========== Filter / Sort State Functions ==========
+
+function getColumnUniqueValues(colName) {
+    if (!uploadedData) return [];
+    const seen = new Set();
+    uploadedData.forEach(row => seen.add(String(row[colName] ?? '')));
+    return [...seen].sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+}
+
+function initFilterState(columns, data) {
+    tableColumns = columns;
+    sortState = null;
+    activeView = [...data];
+    filterState = {};
+    columns.forEach(col => {
+        filterState[col] = new Set(getColumnUniqueValues(col));
+    });
+}
+
+function computeActiveView() {
+    if (!uploadedData) { activeView = null; return; }
+    let result = uploadedData.filter(row => {
+        return tableColumns.every(col => {
+            if (!filterState[col]) return true;
+            return filterState[col].has(String(row[col] ?? ''));
+        });
+    });
+    if (sortState) {
+        const { col, dir } = sortState;
+        result.sort((a, b) => {
+            const av = String(a[col] ?? '');
+            const bv = String(b[col] ?? '');
+            return av.localeCompare(bv, undefined, {numeric: true, sensitivity: 'base'}) * (dir === 'asc' ? 1 : -1);
+        });
+    }
+    activeView = result;
+}
+
+function getFilteredData() {
+    return activeView ?? uploadedData;
+}
+
+// ========== Filter Dropdown UI ==========
+
+function closeColumnFilter() {
+    const existing = document.getElementById('colFilterDropdown');
+    if (existing) existing.remove();
+    openFilterDropdown = null;
+}
+
+function filterDropdownList(searchText) {
+    const items = document.querySelectorAll('#colFilterValueList .col-filter-item');
+    const lower = searchText.toLowerCase();
+    items.forEach(item => {
+        item.style.display = item.dataset.value.toLowerCase().includes(lower) ? '' : 'none';
+    });
+    updateSelectAllState();
+}
+
+function toggleSelectAll(checked) {
+    document.querySelectorAll('#colFilterValueList .col-filter-check').forEach(cb => {
+        if (cb.closest('.col-filter-item').style.display !== 'none') {
+            cb.checked = checked;
+        }
+    });
+}
+
+function updateSelectAllState() {
+    const all = [...document.querySelectorAll('#colFilterValueList .col-filter-check')];
+    const visible = all.filter(cb => cb.closest('.col-filter-item').style.display !== 'none');
+    const checkedCount = visible.filter(cb => cb.checked).length;
+    const sa = document.getElementById('colFilterSelectAll');
+    if (sa) {
+        sa.indeterminate = checkedCount > 0 && checkedCount < visible.length;
+        sa.checked = checkedCount === visible.length;
+    }
+}
+
+function openColumnFilter(colName, thEl) {
+    if (openFilterDropdown === colName) { closeColumnFilter(); return; }
+    closeColumnFilter();
+    openFilterDropdown = colName;
+
+    const rect = thEl.getBoundingClientRect();
+    const uniqueValues = getColumnUniqueValues(colName);
+    const selected = filterState[colName] || new Set(uniqueValues);
+
+    const panel = document.createElement('div');
+    panel.id = 'colFilterDropdown';
+    panel.style.cssText = `position:fixed;top:${rect.bottom}px;left:${rect.left}px;z-index:9999;`;
+
+    const escapedCol = colName.replace(/'/g, "\\'");
+
+    let listItems = uniqueValues.map(val => {
+        const checked = selected.has(val) ? 'checked' : '';
+        const display = val === '' ? '(blank)' : escapeHtml(val);
+        return `<div class="col-filter-item" data-value="${escapeHtml(val)}">
+            <label><input type="checkbox" class="col-filter-check" value="${escapeHtml(val)}" ${checked}><span>${display}</span></label>
+        </div>`;
+    }).join('');
+
+    const allChecked = uniqueValues.every(v => selected.has(v));
+    const someChecked = uniqueValues.some(v => selected.has(v));
+    const saIndeterminate = someChecked && !allChecked;
+
+    panel.innerHTML = `
+        <div class="col-filter-sort-row">
+            <button onclick="applySortFromDropdown('${escapedCol}', 'asc')">Sort A → Z</button>
+            <button onclick="applySortFromDropdown('${escapedCol}', 'desc')">Sort Z → A</button>
+        </div>
+        <hr class="col-filter-divider">
+        <div class="col-filter-search-wrap">
+            <input type="text" id="colFilterSearch" placeholder="Search values..." oninput="filterDropdownList(this.value)">
+        </div>
+        <div class="col-filter-item" style="border-bottom:1px solid #444;padding-bottom:6px;margin-bottom:2px;">
+            <label><input type="checkbox" id="colFilterSelectAll" ${allChecked ? 'checked' : ''} onchange="toggleSelectAll(this.checked)"><span>(Select All)</span></label>
+        </div>
+        <div id="colFilterValueList" class="col-filter-value-list">${listItems}</div>
+        <hr class="col-filter-divider">
+        <div class="col-filter-actions">
+            <button class="col-filter-btn-cancel" onclick="closeColumnFilter()">Cancel</button>
+            <button class="col-filter-btn-apply" onclick="applyColumnFilter('${escapedCol}')">Apply</button>
+        </div>`;
+
+    document.body.appendChild(panel);
+
+    // Fix indeterminate state (can't be set via HTML attribute)
+    if (saIndeterminate) document.getElementById('colFilterSelectAll').indeterminate = true;
+
+    // Add change listener to sync Select All state
+    panel.querySelectorAll('.col-filter-check').forEach(cb => {
+        cb.addEventListener('change', updateSelectAllState);
+    });
+
+    // Clamp to right edge of viewport
+    const panelRect = panel.getBoundingClientRect();
+    if (panelRect.right > window.innerWidth) {
+        panel.style.left = Math.max(0, window.innerWidth - panelRect.width - 8) + 'px';
+    }
+}
+
+function applyColumnFilter(colName) {
+    const checked = [...document.querySelectorAll('#colFilterValueList .col-filter-check')]
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+    filterState[colName] = new Set(checked);
+    computeActiveView();
+    closeColumnFilter();
+    displayEditablePreview(activeView, tableColumns);
+}
+
+function applySortFromDropdown(colName, dir) {
+    sortState = { col: colName, dir };
+    computeActiveView();
+    closeColumnFilter();
+    displayEditablePreview(activeView, tableColumns);
+}
+
+// ========== End Filter/Sort ==========
+
 async function displayEditablePreview(data, columns) {
     const previewContainer = document.getElementById('dataPreview');
     if (!previewContainer) return;
@@ -372,6 +556,11 @@ async function displayEditablePreview(data, columns) {
     if (!data || data.length === 0) {
         previewContainer.innerHTML = '<div class="info-box">No data to preview</div>';
         return;
+    }
+
+    // Initialize filter state on first load or when columns change
+    if (tableColumns.length === 0 || columns.join(',') !== tableColumns.join(',')) {
+        initFilterState(columns, uploadedData);
     }
 
     // Get all template names to validate against
@@ -385,12 +574,23 @@ async function displayEditablePreview(data, columns) {
     tableHTML += '<thead><tr style="position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">';
     tableHTML += `<th style="padding: 10px; border: 1px solid #444; border-bottom: 2px solid #667eea; color: #999; font-weight: bold; text-align: center; width: 50px; background: #252526;">#</th>`;
     columns.forEach(col => {
-        tableHTML += `<th style="padding: 10px; border: 1px solid #444; border-bottom: 2px solid #667eea; color: #fff; font-weight: bold; text-align: center; background: #2d2d30;">${escapeHtml(col)}</th>`;
+        const allVals = getColumnUniqueValues(col);
+        const isFiltered = filterState[col] && filterState[col].size < allVals.length;
+        const isSorted = sortState && sortState.col === col;
+        const isActive = isFiltered || isSorted;
+        tableHTML += `<th data-col="${escapeHtml(col)}"
+            style="padding: 10px; border: 1px solid #444; border-bottom: 2px solid #667eea; color: #fff; font-weight: bold; text-align: center; background: #2d2d30; cursor: pointer; user-select: none; white-space: nowrap;"
+            onclick="openColumnFilter('${escapeHtml(col).replace(/'/g, "\\'")}', this)">
+            ${escapeHtml(col)}<span class="col-filter-icon${isActive ? ' col-filter-active' : ''}">&#9660;</span>
+        </th>`;
     });
     tableHTML += '</tr></thead><tbody>';
 
     // Data rows
     data.forEach((row, rowIndex) => {
+        // Use index in uploadedData so cell edits survive filtering
+        const uploadedIdx = uploadedData ? uploadedData.indexOf(row) : rowIndex;
+
         // Check for errors in this row
         const template = row.template ? String(row.template).trim() : '';
         const switchName = row.switch_name ? String(row.switch_name).trim() : '';
@@ -434,11 +634,11 @@ async function displayEditablePreview(data, columns) {
             tableHTML += `<td style="padding: 8px; border: 1px solid #444; text-align: center; background: ${cellBgColor};">
                 <input type="text"
                        class="cell-input"
-                       data-row="${rowIndex}"
+                       data-row="${uploadedIdx}"
                        data-col="${escapeHtml(col)}"
                        value="${escapeHtml(String(value))}"
                        style="width: 100%; background: transparent; border: none; color: #ccc; padding: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; text-align: center;"
-                       onchange="handleCellEdit(${rowIndex}, '${escapeHtml(col)}', this.value)">
+                       onchange="handleCellEdit(${uploadedIdx}, '${escapeHtml(col)}', this.value)">
             </td>`;
         });
         tableHTML += '</tr>';
@@ -456,7 +656,9 @@ async function handleCellEdit(rowIndex, column, value) {
 }
 
 async function generateConfigs() {
-    if (!uploadedData) {
+    const data = getFilteredData();
+    if (!data || data.length === 0) {
+        showNotification('No Data', 'No rows to generate configs from. Check your filters.', 'warning');
         return;
     }
 
@@ -464,7 +666,7 @@ async function generateConfigs() {
         const response = await fetch('/api/generate-configs', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({excel_data: uploadedData})
+            body: JSON.stringify({excel_data: data})
         });
 
         const result = await response.json();
