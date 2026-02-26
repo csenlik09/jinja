@@ -321,6 +321,16 @@ async function handleFileUpload(event) {
         if (result.success) {
             // Sort data by switch name, then by eth_port
             const sortedData = sortDataByPortOrder(result.data);
+
+            // Pre-clean switch_port values before filter state is built
+            sortedData.forEach(row => {
+                if (row.switch_port) {
+                    let v = String(row.switch_port).replace(/^Port-/i, '');
+                    v = v.replace(/^0+(\d)/, '$1');
+                    row.switch_port = v;
+                }
+            });
+
             uploadedData = sortedData;
 
             const generateBtn = document.getElementById('generateBtn');
