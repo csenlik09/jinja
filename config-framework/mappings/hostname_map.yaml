@@ -1,0 +1,17 @@
+schema_version: 1
+
+hostname_rules:
+  - host_type: hadoop
+    regex: "(?i)hadoop|hdp"
+  - host_type: minos
+    regex: "(?i)minos"
+  - host_type: xcoder
+    regex: "(?i)xcoder|xcode"
+  - host_type: cumulus
+    regex: "(?i)cumulus|cl-"
+  - host_type: ipmv
+    regex: "(?i)ipmv"
+  - host_type: hypervisor
+    regex: "(?i)hypervisor|esx|hv"
+
+default_host_type: xcoder

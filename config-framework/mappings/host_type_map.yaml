@@ -1,0 +1,11 @@
+schema_version: 1
+
+host_type_to_profile:
+  hadoop: trunk_ptp_pc
+  minos: trunk_pc
+  xcoder: access_single
+  cumulus: trunk_pc
+  ipmv: access_single
+  hypervisor: trunk_ptp_pc
+  default: access_single
+

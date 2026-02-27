@@ -1,0 +1,34 @@
+schema_version: 1
+
+configuration_types:
+  - id: interface
+    name: Interface Configuration
+    enabled: true
+    description: Access/trunk interface configuration from Excel rows.
+    subcategories:
+      - id: access
+        name: Access Interface
+      - id: trunk
+        name: Trunk Interface
+      - id: port_channel
+        name: Port-Channel Interface
+
+  - id: transit_vlan
+    name: Transit VLAN Configuration
+    enabled: false
+    description: Planned.
+
+  - id: vxlan
+    name: VXLAN Configuration
+    enabled: false
+    description: Planned.
+
+  - id: bgp
+    name: BGP Configuration
+    enabled: false
+    description: Planned.
+
+  - id: snmp
+    name: SNMP Configuration
+    enabled: false
+    description: Planned.

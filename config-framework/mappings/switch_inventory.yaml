@@ -1,0 +1,49 @@
+schema_version: 1
+
+# Exact switch definitions (one-by-one)
+# Key is switch_name; value is vendor/os/model/platform mapping.
+exact_switches:
+  leaf01.dcs.cl1:
+    platform_id: cisco_nxos_n9k
+    vendor: cisco
+    os: nxos
+    model: N9K-C93180YC-FX3
+  leaf02.dcs.cl1:
+    platform_id: cisco_nxos_n9k
+    vendor: cisco
+    os: nxos
+    model: N9K-C93180YC-FX3
+  ar-leaf01.dcs.cl2:
+    platform_id: arista_eos_dcs
+    vendor: arista
+    os: eos
+    model: DCS-7280SR3
+
+# Regex-based definitions (pattern matching)
+# Useful for bulk patterns like all leaf*.dcs.cl1
+regex_rules:
+  - regex: "(?i)^leaf\\d+\\.dcs\\.cl1$"
+    facts:
+      platform_id: cisco_nxos_n9k
+      vendor: cisco
+      os: nxos
+      model: N9K-C93180YC-FX3
+  - regex: "(?i)^spine\\d+\\.dcs\\.cl1$"
+    facts:
+      platform_id: cisco_nxos_n9k
+      vendor: cisco
+      os: nxos
+      model: N9K-C9364C
+  - regex: "(?i)^ar-.*\\.dcs\\.cl2$"
+    facts:
+      platform_id: arista_eos_dcs
+      vendor: arista
+      os: eos
+      model: DCS-7280SR3
+
+# Fallback if nothing matches above
+default_facts:
+  platform_id: cisco_nxos_n9k
+  vendor: cisco
+  os: nxos
+  model: generic

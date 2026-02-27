@@ -1,0 +1,23 @@
+schema_version: 1
+
+platform_rules:
+  - platform_id: cisco_nxos_n9k
+    match:
+      vendor: cisco
+      os: nxos
+      model_regex: "^N9K-"
+
+  - platform_id: cisco_nxos_n3k
+    match:
+      vendor: cisco
+      os: nxos
+      model_regex: "^N3K-"
+
+  - platform_id: arista_eos_dcs
+    match:
+      vendor: arista
+      os: eos
+      model_regex: "^(DCS|7050|7060|7280|7500)"
+
+default_platform_id: generic_eos_like
+

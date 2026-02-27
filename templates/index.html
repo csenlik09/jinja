@@ -556,34 +556,7 @@
 
     <div class="tab-container">
         <button class="tab-button active" onclick="switchTab('config-generator')">Config Generator</button>
-        <button class="tab-button" onclick="switchTab('template-manager')">Manage Templates</button>
-        <button class="tab-button" onclick="switchTab('jinja-tester')">Jinja Tester</button>
         <button class="tab-button" onclick="switchTab('logs')">Logs</button>
-    </div>
-
-    <!-- Jinja Tester Tab -->
-    <div id="jinja-tester" class="tab-content">
-        <div class="main-container">
-            <div class="panel">
-                <div class="panel-header">Variables (YAML/JSON)</div>
-                <div class="editor-container">
-                    <textarea id="variables"></textarea>
-                </div>
-            </div>
-
-            <div class="panel">
-                <div class="panel-header">Template</div>
-                <div id="template-error-container"></div>
-                <div class="editor-container">
-                    <textarea id="template"></textarea>
-                </div>
-            </div>
-
-            <div class="panel">
-                <div class="panel-header">Output</div>
-                <div id="output-container"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Config Generator Tab -->
@@ -592,8 +565,19 @@
             <!-- Left Panel: Upload and Preview -->
             <div id="leftPanel" style="width: 50%; display: flex; flex-direction: column; background: #252526;">
                 <div class="upload-section">
+                    <div class="info-box" id="loginSection" style="margin-bottom: 12px; display: none;">
+                        🔐 Session Login State (UI only):
+                        <input type="text" id="loginUsername" class="form-input" placeholder="Username" style="width: 180px; margin-left: 10px; display: inline-block;">
+                        <input type="password" id="loginPassword" class="form-input" placeholder="Password" style="width: 180px; margin-left: 6px; display: inline-block;">
+                        <button class="button button-secondary" onclick="saveLoginState()" style="padding: 6px 10px;">Save</button>
+                        <span id="loginStateLabel" style="margin-left: 8px; color: #999; font-size: 0.85em;"></span>
+                    </div>
                     <div class="info-box">
-                        📋 Upload an Excel file with device configurations. Required columns: <strong>template</strong> (template name), <strong>switch_name</strong>, <strong>switch_port</strong>. Additional columns should match your template variables.
+                        📋 Upload an Excel file with device configurations. Required columns: <strong>hostname</strong>, <strong>host_port</strong>, <strong>switch_name</strong>, <strong>switch_port</strong>. Optional: <strong>vlan</strong>, <strong>vip</strong>.
+                    </div>
+                    <div style="margin-top: 10px; text-align: center;">
+                        <label for="configTypeSelect" style="color:#ccc; margin-right: 8px;">Configuration Type</label>
+                        <select id="configTypeSelect" class="form-select" style="display:inline-block; width: 260px; vertical-align: middle;"></select>
                     </div>
                     <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                         <div class="upload-icon">📤</div>
@@ -615,54 +599,6 @@
 
             <!-- Right Panel: Config Results -->
             <div class="config-results" id="configResults" style="flex: 1; overflow: auto; padding: 20px;"></div>
-        </div>
-    </div>
-
-    <!-- Template Manager Tab -->
-    <div id="template-manager" class="tab-content">
-        <div class="template-manager">
-            <div class="template-list-panel">
-                <div class="panel-header">
-                    <span>Templates</span>
-                </div>
-                <div class="filter-section">
-                    <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px;">
-                        <button class="button" onclick="showHostTypeManager()" style="flex: 1; padding: 10px; margin: 0;">Host Types</button>
-                        <button class="button" onclick="showVendorManager()" style="flex: 1; padding: 10px; margin: 0;">Port Types</button>
-                        <button class="button" onclick="showOSManager()" style="flex: 1; padding: 10px; margin: 0;">Switch OS</button>
-                    </div>
-                    <button class="button" onclick="createNewTemplate()" style="width: 100%; margin-bottom: 10px;">+ New Template</button>
-                    <button class="button" onclick="exportDatabase()" style="width: 100%; background: #4CAF50; margin-bottom: 10px;">Backup</button>
-                    <input type="file" id="importDbFile" accept=".db" style="display: none;" onchange="importDatabase(event)">
-                    <button class="button" onclick="document.getElementById('importDbFile').click()" style="width: 100%; background: #FF9800;">Restore</button>
-
-                    <!-- Hidden filter dropdowns (kept for backwards compatibility) -->
-                    <select class="form-select" id="filterHostType" onchange="filterTemplates()" style="display: none;">
-                        <option value="">All Host Types</option>
-                    </select>
-                    <select class="form-select" id="filterVendor" onchange="updateOSDropdown(); filterTemplates();" style="display: none;">
-                        <option value="">All Switch Vendors</option>
-                    </select>
-                    <select class="form-select" id="filterOS" onchange="filterTemplates()" style="display: none;">
-                        <option value="">All Switch OS</option>
-                    </select>
-                </div>
-                <div class="template-list" id="templateList"></div>
-            </div>
-
-            <div class="template-editor-panel">
-                <div class="panel-header">Template Editor</div>
-                <div class="template-form" id="templateForm">
-                    <div class="info-box">
-                        Select a template from the list or create a new one to start editing.
-                    </div>
-                </div>
-                <div class="form-actions" id="formActions" style="display: none;">
-                    <button class="button button-secondary" onclick="cancelEdit()">Cancel</button>
-                    <button class="button" style="background: #f44336;" onclick="deleteTemplate()" id="deleteBtn">Delete</button>
-                    <button class="button" onclick="saveTemplate()">Save</button>
-                </div>
-            </div>
         </div>
     </div>
 

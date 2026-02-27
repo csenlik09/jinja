@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file
-from jinja2 import Template, TemplateSyntaxError, UndefinedError
+from jinja2 import Template, TemplateSyntaxError, UndefinedError, Environment, FileSystemLoader, StrictUndefined
 import json
 import yaml
 import pandas as pd
@@ -9,8 +9,10 @@ import os
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
-from collections import deque
+from collections import deque, defaultdict
 import subprocess
+from pathlib import Path
+import re
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -72,6 +74,160 @@ db = Database()
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# YAML-based configuration model for Config Generator
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_DIR = BASE_DIR / 'config-framework'
+
+render_env = Environment(
+    loader=FileSystemLoader(str(BASE_DIR / 'templates')),
+    undefined=StrictUndefined,
+    trim_blocks=True,
+    lstrip_blocks=True,
+)
+
+def load_yaml(rel_path):
+    file_path = CONFIG_DIR / rel_path
+    if not file_path.exists():
+        return {}
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+HOSTNAME_MAP = load_yaml('mappings/hostname_map.yaml')
+HOST_TYPE_MAP = load_yaml('mappings/host_type_map.yaml')
+SWITCH_MAP = load_yaml('mappings/switch_map.yaml')
+SWITCH_INVENTORY = load_yaml('mappings/switch_inventory.yaml')
+INTERFACE_PROFILES = load_yaml('profiles/interface_profiles.yaml')
+INTERFACE_NAMING = load_yaml('platform/interface_naming.yaml')
+FEATURE_TRANSLATION = load_yaml('platform/feature_translation.yaml')
+CONFIG_TYPES = load_yaml('types/config_types.yaml')
+
+def normalize_input_row(row):
+    lookup = {str(k).strip().lower(): v for k, v in row.items()}
+
+    def pick(*keys):
+        for key in keys:
+            if key in lookup and lookup[key] is not None:
+                return str(lookup[key]).strip()
+        return ''
+
+    return {
+        'hostname': pick('hostname', 'host_name', 'host'),
+        'host_port': pick('host_port', 'host port', 'server_port'),
+        'switch_name': pick('switch_name', 'switch name', 'switch'),
+        'switch_port': pick('switch_port', 'switch port', 'interface'),
+        'vlan': pick('vlan'),
+        'vip': pick('vip', 'virtual_ip', 'virtual ip')
+    }
+
+def resolve_host_type(hostname):
+    for rule in HOSTNAME_MAP.get('hostname_rules', []):
+        if re.search(rule.get('regex', ''), hostname or ''):
+            return rule.get('host_type', 'xcoder')
+    return HOSTNAME_MAP.get('default_host_type', 'xcoder')
+
+def resolve_platform(switch_name):
+    # 1) Exact switch entries from inventory file
+    exact_switches = SWITCH_INVENTORY.get('exact_switches', {})
+    for name, facts in exact_switches.items():
+        if str(name).strip().lower() == str(switch_name or '').strip().lower():
+            return {
+                'platform_id': facts.get('platform_id', 'cisco_nxos_n9k'),
+                'vendor': facts.get('vendor', ''),
+                'os': facts.get('os', ''),
+                'model': facts.get('model', '')
+            }
+
+    # 2) Regex rules from inventory file
+    for rule in SWITCH_INVENTORY.get('regex_rules', []):
+        if re.search(rule.get('regex', ''), switch_name or ''):
+            facts = rule.get('facts', {})
+            return {
+                'platform_id': facts.get('platform_id', 'cisco_nxos_n9k'),
+                'vendor': facts.get('vendor', ''),
+                'os': facts.get('os', ''),
+                'model': facts.get('model', '')
+            }
+
+    # 3) Backward-compatible fallback to switch_map.yaml
+    for rule in SWITCH_MAP.get('switch_rules', []):
+        if re.search(rule.get('regex', ''), switch_name or ''):
+            return {
+                'platform_id': rule.get('platform_id', 'cisco_nxos'),
+                'vendor': rule.get('vendor', ''),
+                'os': rule.get('os', ''),
+                'model': rule.get('model', '')
+            }
+
+    # 4) Inventory default, then old default
+    default_facts = SWITCH_INVENTORY.get('default_facts')
+    if default_facts:
+        return {
+            'platform_id': default_facts.get('platform_id', 'cisco_nxos_n9k'),
+            'vendor': default_facts.get('vendor', ''),
+            'os': default_facts.get('os', ''),
+            'model': default_facts.get('model', '')
+        }
+
+    return SWITCH_MAP.get('default_platform', {'platform_id': 'cisco_nxos_n9k'})
+
+def format_interface_name(platform_id, switch_port):
+    naming = INTERFACE_NAMING.get('interface_naming', {}).get(platform_id, {})
+    pattern = naming.get('ethernet_pattern', 'Ethernet{switch_port}')
+
+    port_raw = str(switch_port).strip()
+    port_raw = re.sub(r'^(?i:ethernet)', '', port_raw)
+    port_raw = port_raw.lstrip('/')
+    slot = '1'
+    port = port_raw
+
+    if '/' in port_raw:
+        parts = [p for p in port_raw.split('/') if p != '']
+        if len(parts) >= 2:
+            slot, port = parts[0], parts[1]
+        elif len(parts) == 1:
+            port = parts[0]
+
+    try:
+        return pattern.format(switch_port=switch_port, slot=slot, port=port)
+    except Exception:
+        return f"Ethernet{port_raw}"
+
+def build_interface_context(row):
+    host_type = resolve_host_type(row['hostname'])
+    platform = resolve_platform(row['switch_name'])
+    platform_id = platform['platform_id']
+
+    host_to_profile = HOST_TYPE_MAP.get('host_type_to_profile', {})
+    default_profile_id = host_to_profile.get('default', 'access_single')
+    profile_id = host_to_profile.get(host_type, default_profile_id)
+    profile_map = INTERFACE_PROFILES.get('interface_profiles', {})
+    profile = profile_map.get(profile_id, profile_map.get(default_profile_id, {}))
+
+    stp_profile = profile.get('stp_profile', 'edge_access')
+    storm_profile = profile.get('storm_control_profile', 'none')
+    feature_translation = FEATURE_TRANSLATION.get('feature_translation', {})
+    stp_commands = feature_translation.get('stp_profile', {})
+    storm_commands = feature_translation.get('storm_control_profile', {})
+    stp_value = stp_commands.get(stp_profile, {}).get(platform_id, '')
+    if isinstance(stp_value, list):
+        stp_value = stp_value[0] if stp_value else ''
+    storm_value = storm_commands.get(storm_profile, {}).get(platform_id, [])
+    if not isinstance(storm_value, list):
+        storm_value = [str(storm_value)] if storm_value else []
+
+    return {
+        'platform_id': platform_id,
+        'host_type': host_type,
+        'profile_id': profile_id,
+        'interface_name': format_interface_name(platform_id, row['switch_port']),
+        'description': f"{row['hostname']}:{row['host_port']}" + (f" VIP:{row['vip']}" if row['vip'] else ''),
+        'port_mode': profile.get('port_mode', 'access'),
+        'ptp_enabled': bool(profile.get('ptp_enabled', False)),
+        'vlan': row['vlan'],
+        'stp_command': stp_value,
+        'storm_control_commands': storm_value
+    }
 
 @app.route('/')
 def index():
@@ -311,105 +467,72 @@ def upload_excel():
         # Replace NaN values with empty strings to avoid template errors
         df = df.fillna('')
 
-        # Convert to list of dictionaries
-        data = df.to_dict('records')
+        # Convert to list of dictionaries and normalize expected keys for interface config flow
+        raw_data = df.to_dict('records')
+        data = [normalize_input_row(row) for row in raw_data]
+        columns = ['hostname', 'host_port', 'switch_name', 'switch_port', 'vlan', 'vip']
 
         app.logger.info(f"Excel file processed successfully: {len(data)} rows loaded")
 
-        return jsonify({'success': True, 'data': data, 'columns': list(df.columns)})
+        return jsonify({'success': True, 'data': data, 'columns': columns})
 
     except Exception as e:
         app.logger.error(f"Error uploading Excel file: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 400
 
+@app.route('/api/config-types', methods=['GET'])
+def get_config_types():
+    return jsonify(CONFIG_TYPES)
+
 @app.route('/api/generate-configs', methods=['POST'])
 def generate_configs():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         excel_data = data.get('excel_data', [])
+        config_type = data.get('config_type', 'interface')
 
         if not excel_data:
             app.logger.warning("Config generation attempt with no data")
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
+        if config_type != 'interface':
+            return jsonify({'success': False, 'error': f"Configuration type '{config_type}' is not implemented yet"}), 400
+
         app.logger.info(f"User generating configs from {len(excel_data)} rows")
 
-        # Group rows by template name
-        from collections import defaultdict
+        template = render_env.get_template('interface/interface_config.j2')
         grouped_data = defaultdict(list)
-        skipped_count = 0
-
-        for row in excel_data:
-            template_name = row.get('template')
-            switch_name = row.get('switch_name')
-            switch_port = row.get('switch_port')
-
-            # Skip rows missing required fields
-            if not template_name or not switch_name or switch_port is None or str(switch_port).strip() == '':
-                app.logger.debug(f"Skipping row - template={template_name}, switch_name={switch_name}, switch_port={switch_port}")
-                skipped_count += 1
-                continue
-
-            # Normalize template name for grouping
-            key = str(template_name).strip()
-            grouped_data[key].append(row)
-
-        app.logger.info(f"Grouped data: {len(grouped_data)} template(s), {skipped_count} rows skipped")
-
         configs = []
         success_row_count = 0
         error_row_count = 0
+        skipped_count = 0
 
-        # Process each template group
-        for template_name, rows in grouped_data.items():
-            # Find template by name
-            template_obj = db.get_template_by_name(template_name)
-
-            if not template_obj:
-                # No template found - mark all rows in this group as errors
-                app.logger.warning(f"Template not found: {template_name} (affected {len(rows)} rows)")
-                error_row_count += len(rows)
-                for row in rows:
-                    configs.append({
-                        'row': row,
-                        'success': False,
-                        'error': f'No template found with name: {template_name}'
-                    })
+        for idx, raw in enumerate(excel_data, start=1):
+            row = normalize_input_row(raw)
+            missing = [k for k in ['hostname', 'host_port', 'switch_name', 'switch_port'] if not row.get(k)]
+            if missing:
+                skipped_count += 1
+                error_row_count += 1
+                configs.append({
+                    'row': row,
+                    'success': False,
+                    'error': f"Missing required fields: {', '.join(missing)} (row {idx})"
+                })
                 continue
 
-            app.logger.info(f"Rendering template '{template_name}' for {len(rows)} rows")
-            template_str = template_obj['template_content']
+            context = build_interface_context(row)
+            output = template.render(**context).strip()
+            grouped_data[row['switch_name']].append(output)
+            success_row_count += 1
 
-            # Render template with grouped data
-            try:
-                template = Template(template_str)
-                # Pass all rows as 'ports' and 'switches' list + individual fields from first row
-                render_context = rows[0].copy() if rows else {}
-                render_context['ports'] = rows
-                render_context['switches'] = rows  # Keep for backward compatibility
-
-                output = template.render(**render_context)
-
-                # Return one config for the entire group
-                success_row_count += len(rows)
-                app.logger.info(f"Successfully rendered config for template '{template_name}' ({len(rows)} rows)")
-                configs.append({
-                    'row': {'template': template_name, 'row_count': len(rows)},
-                    'success': True,
-                    'config': output,
-                    'template_name': template_obj['name'],
-                    'row_count': len(rows)
-                })
-            except Exception as e:
-                # Template rendering failed - mark all rows in this group as errors
-                app.logger.error(f"Template rendering error for '{template_name}': {str(e)}")
-                error_row_count += len(rows)
-                for row in rows:
-                    configs.append({
-                        'row': row,
-                        'success': False,
-                        'error': f'Template rendering error: {str(e)}'
-                    })
+        for switch_name, snippets in grouped_data.items():
+            configs.append({
+                'row': {'switch_name': switch_name, 'row_count': len(snippets)},
+                'success': True,
+                'config': '\n'.join(snippets).strip(),
+                'switch_name': switch_name,
+                'row_count': len(snippets)
+            })
 
         app.logger.info(f"Config generation complete: {success_row_count} success, {error_row_count} errors, {skipped_count} skipped")
 

@@ -6,6 +6,7 @@ let currentTemplateVersion = null;
 let isEditMode = false;
 let allTemplates = [];
 let generatedConfigs = [];
+let configTypes = [];
 
 // Filter/sort state for the preview table
 let tableColumns = [];         // Column names from last upload
@@ -57,6 +58,45 @@ function closeNotification() {
     document.getElementById('notificationModal').style.display = 'none';
 }
 
+function saveLoginState() {
+    const username = document.getElementById('loginUsername')?.value?.trim() || '';
+    const password = document.getElementById('loginPassword')?.value || '';
+    localStorage.setItem('netconfig.login.username', username);
+    localStorage.setItem('netconfig.login.password_set', password ? '1' : '0');
+    const label = document.getElementById('loginStateLabel');
+    if (label) label.textContent = username ? `Saved for ${username}` : 'Saved';
+}
+
+function loadLoginState() {
+    const username = localStorage.getItem('netconfig.login.username') || '';
+    const passwordSet = localStorage.getItem('netconfig.login.password_set') === '1';
+    const userEl = document.getElementById('loginUsername');
+    const label = document.getElementById('loginStateLabel');
+    if (userEl) userEl.value = username;
+    if (label) label.textContent = username ? `Loaded ${username}${passwordSet ? ' (password set)' : ''}` : '';
+}
+
+async function loadConfigTypes() {
+    const select = document.getElementById('configTypeSelect');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/api/config-types');
+        const data = await response.json();
+        configTypes = data.configuration_types || [];
+        select.innerHTML = '';
+        configTypes.forEach(type => {
+            const opt = document.createElement('option');
+            opt.value = type.id;
+            opt.textContent = `${type.name}${type.enabled ? '' : ' (planned)'}`;
+            select.appendChild(opt);
+        });
+        select.value = 'interface';
+    } catch (error) {
+        console.error('Error loading config types:', error);
+    }
+}
+
 function confirm(message, onConfirm) {
     const buttons = `
         <button class="button button-secondary" onclick="closeNotification()">Cancel</button>
@@ -67,9 +107,10 @@ function confirm(message, onConfirm) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    initializeJinjaTester();
-    initializeTemplateManager();
+    // Jinja Tester and Template Manager tabs are removed from UI for this phase.
     setupDragAndDrop();
+    loadConfigTypes();
+    loadLoginState();
 
     // Close filter dropdown on outside click
     document.addEventListener('mousedown', (e) => {
@@ -573,11 +614,6 @@ async function displayEditablePreview(data, columns) {
         initFilterState(columns, uploadedData);
     }
 
-    // Get all template names to validate against
-    const templatesResponse = await fetch('/api/templates');
-    const templates = await templatesResponse.json();
-    const validTemplateNames = templates.map(t => t.name.toLowerCase());
-
     let tableHTML = '<div style="padding: 20px; padding-top: 0;"><table class="preview-table" style="width: 100%; border-collapse: collapse; background: #1e1e1e;">';
 
     // Header
@@ -602,16 +638,17 @@ async function displayEditablePreview(data, columns) {
         const uploadedIdx = uploadedData ? uploadedData.indexOf(row) : rowIndex;
 
         // Check for errors in this row
-        const template = row.template ? String(row.template).trim() : '';
+        const hostname = row.hostname ? String(row.hostname).trim() : '';
+        const hostPort = row.host_port ? String(row.host_port).trim() : '';
         const switchName = row.switch_name ? String(row.switch_name).trim() : '';
         const switchPort = row.switch_port ? String(row.switch_port).trim() : '';
 
-        const templateMissing = !template;
-        const templateInvalid = template && !validTemplateNames.includes(template.toLowerCase());
+        const hostnameMissing = !hostname;
+        const hostPortMissing = !hostPort;
         const switchNameMissing = !switchName;
         const switchPortMissing = !switchPort;
 
-        const hasError = templateMissing || templateInvalid || switchNameMissing || switchPortMissing;
+        const hasError = hostnameMissing || hostPortMissing || switchNameMissing || switchPortMissing;
         const rowBgColor = hasError ? 'rgba(255, 0, 0, 0.15)' : 'transparent';
 
         tableHTML += `<tr style="background: ${rowBgColor};">`;
@@ -633,7 +670,9 @@ async function displayEditablePreview(data, columns) {
 
             // Determine cell background color
             let cellBgColor = 'transparent';
-            if (col === 'template' && (templateMissing || templateInvalid)) {
+            if (col === 'hostname' && hostnameMissing) {
+                cellBgColor = 'rgba(255, 0, 0, 0.3)';
+            } else if (col === 'host_port' && hostPortMissing) {
                 cellBgColor = 'rgba(255, 0, 0, 0.3)';
             } else if (col === 'switch_name' && switchNameMissing) {
                 cellBgColor = 'rgba(255, 0, 0, 0.3)';
@@ -676,7 +715,10 @@ async function generateConfigs() {
         const response = await fetch('/api/generate-configs', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({excel_data: data})
+            body: JSON.stringify({
+                excel_data: data,
+                config_type: document.getElementById('configTypeSelect')?.value || 'interface'
+            })
         });
 
         const result = await response.json();
@@ -1964,4 +2006,3 @@ async function confirmClearLogs() {
         showNotification('Error', 'Error clearing logs: ' + error.message, 'error');
     }
 }
-

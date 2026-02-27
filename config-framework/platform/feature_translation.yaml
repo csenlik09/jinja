@@ -1,0 +1,63 @@
+schema_version: 1
+
+feature_translation:
+  mc_lag:
+    cisco_nxos_n9k:
+      keyword: vpc
+      command_pattern: "vpc {pc_id}"
+    cisco_nxos_n3k:
+      keyword: vpc
+      command_pattern: "vpc {pc_id}"
+    arista_eos_dcs:
+      keyword: mlag
+      command_pattern: "mlag {pc_id}"
+    generic_eos_like:
+      keyword: none
+      command_pattern: ""
+
+  stp_profile:
+    edge_trunk:
+      cisco_nxos_n9k:
+        - "spanning-tree port type edge trunk"
+      cisco_nxos_n3k:
+        - "spanning-tree port type edge trunk"
+      arista_eos_dcs:
+        - "spanning-tree portfast trunk"
+      generic_eos_like:
+        - "spanning-tree portfast trunk"
+    edge_access:
+      cisco_nxos_n9k:
+        - "spanning-tree port type edge"
+      cisco_nxos_n3k:
+        - "spanning-tree port type edge"
+      arista_eos_dcs:
+        - "spanning-tree portfast"
+      generic_eos_like:
+        - "spanning-tree portfast"
+
+  storm_control_profile:
+    dc_default:
+      cisco_nxos_n9k:
+        - "storm-control broadcast level 1.00"
+        - "storm-control multicast level 1.00"
+      cisco_nxos_n3k:
+        - "storm-control broadcast level 1.00"
+        - "storm-control multicast level 1.00"
+      arista_eos_dcs:
+        - "storm-control broadcast level 1"
+        - "storm-control multicast level 1"
+      generic_eos_like: []
+    arista_default:
+      cisco_nxos_n9k:
+        - "storm-control broadcast level 0.80"
+      cisco_nxos_n3k:
+        - "storm-control broadcast level 0.80"
+      arista_eos_dcs:
+        - "storm-control broadcast level 0.80"
+      generic_eos_like: []
+    none:
+      cisco_nxos_n9k: []
+      cisco_nxos_n3k: []
+      arista_eos_dcs: []
+      generic_eos_like: []
+

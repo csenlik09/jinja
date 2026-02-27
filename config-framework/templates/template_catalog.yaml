@@ -1,0 +1,46 @@
+schema_version: 1
+
+template_blocks:
+  interface_physical_base:
+    file: templates/interface/physical_base.j2
+    when:
+      domain: interface
+
+  interface_access_mode:
+    file: templates/interface/access_mode.j2
+    when:
+      domain: interface
+      port_mode: access
+
+  interface_trunk_mode:
+    file: templates/interface/trunk_mode.j2
+    when:
+      domain: interface
+      port_mode: trunk
+
+  interface_ptp_block:
+    file: templates/interface/ptp_block.j2
+    when:
+      domain: interface
+      ptp_enabled: true
+
+  interface_port_channel_member:
+    file: templates/interface/port_channel_member.j2
+    when:
+      domain: interface
+      uses_port_channel: true
+
+  interface_port_channel_logical:
+    file: templates/interface/port_channel_logical.j2
+    when:
+      domain: interface
+      uses_port_channel: true
+
+render_order:
+  - interface_physical_base
+  - interface_access_mode
+  - interface_trunk_mode
+  - interface_ptp_block
+  - interface_port_channel_member
+  - interface_port_channel_logical
+

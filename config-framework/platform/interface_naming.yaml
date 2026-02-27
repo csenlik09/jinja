@@ -1,0 +1,23 @@
+schema_version: 1
+
+interface_naming:
+  cisco_nxos_n9k:
+    ethernet_pattern: "Ethernet{slot}/{port}"
+    port_channel_pattern: "port-channel{pc_id}"
+    supports_breakout: true
+
+  cisco_nxos_n3k:
+    ethernet_pattern: "Ethernet{slot}/{port}"
+    port_channel_pattern: "port-channel{pc_id}"
+    supports_breakout: false
+
+  arista_eos_dcs:
+    ethernet_pattern: "Ethernet{port}"
+    port_channel_pattern: "Port-Channel{pc_id}"
+    supports_breakout: true
+
+  generic_eos_like:
+    ethernet_pattern: "Ethernet{port}"
+    port_channel_pattern: "Port-Channel{pc_id}"
+    supports_breakout: false
+

@@ -1,0 +1,26 @@
+interface {{ interface_name }}
+  description {{ description }}
+{% if port_mode == 'trunk' %}
+  switchport
+  switchport mode trunk
+{% if vlan %}
+  switchport trunk allowed vlan {{ vlan }}
+{% endif %}
+{% else %}
+  switchport
+  switchport mode access
+{% if vlan %}
+  switchport access vlan {{ vlan }}
+{% endif %}
+{% endif %}
+{% if ptp_enabled %}
+  ptp
+{% endif %}
+{% if stp_command %}
+  {{ stp_command }}
+{% endif %}
+{% for line in storm_control_commands %}
+  {{ line }}
+{% endfor %}
+  no shutdown
+!

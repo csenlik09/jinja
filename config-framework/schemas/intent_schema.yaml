@@ -1,0 +1,73 @@
+schema_version: 1
+domain: interface
+
+required_fields:
+  - switch_name
+  - host_type
+  - host_name
+  - interface_group_id
+
+fields:
+  switch_name:
+    type: string
+    description: Target switch hostname used for switch facts lookup.
+  host_type:
+    type: string
+    description: Workload class (hadoop, minos, xcoder, cumulus, ipmv, hypervisor).
+  host_name:
+    type: string
+    description: Endpoint hostname shown in interface descriptions.
+  interface_group_id:
+    type: string
+    description: Group key for rows that belong to the same endpoint bundle.
+  intent_variant:
+    type: string
+    required: false
+    default: default
+    allowed_values:
+      - default
+      - single_link_no_pc
+      - dual_link_port_channel
+      - dual_link_port_channel_ptp
+  link_count:
+    type: integer
+    required: false
+    min: 1
+    max: 8
+  uses_port_channel:
+    type: boolean
+    required: false
+  port_mode:
+    type: string
+    required: false
+    allowed_values:
+      - access
+      - trunk
+  access_vlan:
+    type: integer
+    required: false
+  native_vlan:
+    type: integer
+    required: false
+  allowed_vlans:
+    type: string
+    required: false
+    description: Comma-separated VLAN list/ranges for trunk mode.
+  ptp_enabled:
+    type: boolean
+    required: false
+  lacp_mode:
+    type: string
+    required: false
+    allowed_values:
+      - active
+      - passive
+      - on
+  pc_id:
+    type: integer
+    required: false
+  member_ports:
+    type: string
+    required: false
+    description: Optional explicit port list, e.g. "1/1,1/2".
+

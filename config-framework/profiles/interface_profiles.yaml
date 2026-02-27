@@ -1,0 +1,32 @@
+schema_version: 1
+
+interface_profiles:
+  trunk_ptp_pc:
+    description: Trunk + port-channel + PTP enabled.
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    ptp_enabled: true
+    lacp_mode: active
+    mtu: 9216
+    stp_profile: edge_trunk
+
+  trunk_pc:
+    description: Trunk + port-channel without PTP.
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    ptp_enabled: false
+    lacp_mode: active
+    mtu: 9216
+    stp_profile: edge_trunk
+
+  access_single:
+    description: Single physical access interface.
+    port_mode: access
+    uses_port_channel: false
+    link_count: 1
+    ptp_enabled: false
+    mtu: 1500
+    stp_profile: edge_access
+

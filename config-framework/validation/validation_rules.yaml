@@ -1,0 +1,48 @@
+schema_version: 1
+
+rules:
+  - id: require_access_vlan_for_access_mode
+    when:
+      port_mode: access
+    assert:
+      field_present: access_vlan
+    severity: error
+    message: access_vlan is required when port_mode is access.
+
+  - id: require_allowed_vlans_for_trunk_mode
+    when:
+      port_mode: trunk
+    assert:
+      field_present: allowed_vlans
+    severity: error
+    message: allowed_vlans is required when port_mode is trunk.
+
+  - id: require_pc_id_when_port_channel
+    when:
+      uses_port_channel: true
+    assert:
+      field_present: pc_id
+    severity: error
+    message: pc_id is required when uses_port_channel is true.
+
+  - id: require_multiple_links_when_port_channel
+    when:
+      uses_port_channel: true
+    assert:
+      field_min:
+        name: link_count
+        value: 1
+    severity: warning
+    message: Port-channel with a single link is allowed but should be reviewed.
+
+  - id: deny_ptp_on_unsupported_platform
+    when:
+      ptp_enabled: true
+      platform_id:
+        in:
+          - generic_eos_like
+    assert:
+      always: false
+    severity: error
+    message: PTP is not enabled for this platform profile.
+

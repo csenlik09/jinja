@@ -1,0 +1,64 @@
+schema_version: 1
+
+platform_defaults_by_host_type:
+  hadoop:
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+    ptp_enabled: true
+    mtu: 9216
+    stp_profile: edge_trunk
+    storm_control_profile: dc_default
+
+  minos:
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+    ptp_enabled: false
+    mtu: 9216
+    stp_profile: edge_trunk
+    storm_control_profile: dc_default
+
+  xcoder:
+    port_mode: access
+    uses_port_channel: false
+    link_count: 1
+    lacp_mode: active
+    ptp_enabled: false
+    mtu: 1500
+    stp_profile: edge_access
+    storm_control_profile: none
+
+  cumulus:
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+    ptp_enabled: false
+    mtu: 9216
+    stp_profile: edge_trunk
+    storm_control_profile: dc_default
+
+  ipmv:
+    port_mode: access
+    uses_port_channel: false
+    link_count: 1
+    lacp_mode: active
+    ptp_enabled: false
+    mtu: 1500
+    stp_profile: edge_access
+    storm_control_profile: none
+
+  hypervisor:
+    port_mode: trunk
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+    ptp_enabled: true
+    mtu: 9216
+    stp_profile: edge_trunk
+    storm_control_profile: dc_default
+
+default_host_type: xcoder

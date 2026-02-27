@@ -1,0 +1,26 @@
+schema_version: 1
+
+design_profiles:
+  default: {}
+
+  single_link_no_pc:
+    uses_port_channel: false
+    link_count: 1
+
+  dual_link_port_channel:
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+
+  dual_link_port_channel_ptp:
+    uses_port_channel: true
+    link_count: 2
+    lacp_mode: active
+    ptp_enabled: true
+
+  maintenance_access_mode:
+    port_mode: access
+    uses_port_channel: false
+    link_count: 1
+    ptp_enabled: false
+
